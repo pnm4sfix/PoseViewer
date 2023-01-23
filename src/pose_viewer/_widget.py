@@ -6,7 +6,13 @@ see: https://napari.org/stable/plugins/guides.html?#widgets
 
 Replace code below according to your needs.
 """
+
+from re import T
+from socket import TCP_KEEPINTVL
+import sys
+sys.path.insert(1, "./")
 from typing import TYPE_CHECKING
+
 
 from magicgui import magic_factory
 from magicgui.widgets import ComboBox, Container, PushButton, SpinBox, FileEdit, FloatSpinBox, Label, TextEdit, CheckBox
@@ -17,19 +23,30 @@ import numpy as np
 
 import pandas as pd
 from matplotlib import pyplot as plt
-from dask_image.imread import imread
+
 
 from scipy.ndimage import gaussian_filter1d as gaussian_filter1d
 from scipy.signal import find_peaks
 import os
-import pywt
+
+from ._loader import ZebData, HyperParams
+from torch.utils.data import DataLoader, random_split, Subset
+import torch
+from .models import st_gcn_aaai18_pylightning_3block
+from pytorch_lightning import Trainer
+from pytorch_lightning.callbacks.early_stopping import EarlyStopping
+from pytorch_lightning.callbacks.stochastic_weight_avg import StochasticWeightAveraging
+from pytorch_lightning.loggers import TensorBoardLogger
+from pytorch_lightning.callbacks import ModelCheckpoint
+import yaml
+
 import pims
 import tables as tb
-from skimage.segmentation import watershed
-from skimage.feature import peak_local_max
-from scipy import ndimage as ndi
-from sklearn.manifold import TSNE
-from matplotlib.animation import FuncAnimation
+#from skimage.segmentation import watershed
+#from skimage.feature import peak_local_max
+#from scipy import ndimage as ndi
+#from sklearn.manifold import TSNE
+#from matplotlib.animation import FuncAnimation
 import time
 import scipy.stats as st
 
@@ -64,13 +81,17 @@ class ExampleQWidget(Container):
         # Add behaviour labels to a list 
         
         self.title_label = Label(label = "Settings")
+
+        self.decoder_dir_picker = FileEdit(label ="Select data folder", value='./', tooltip = "Select data folder", mode = "d")
+        self.decoder_dir_picker.changed.connect(self.decoder_dir_changed)
+
         self.add_behaviour_text = TextEdit(label = "Enter new behavioural label")
         self.add_behaviour_button = PushButton(label = "Add new behaviour label")
         self.add_behaviour_button.clicked.connect(self.add_behaviour)
 
         self.label_menu = ComboBox(label='Behaviour labels', choices = [], tooltip = "Select behaviour label")
         push_button = PushButton(label = "Save Labels")
-        self.extend([self.title_label, self.add_behaviour_text, self.add_behaviour_button, self.label_menu, push_button])
+        self.extend([self.decoder_dir_picker,  self.add_behaviour_text, self.add_behaviour_button, self.label_menu, push_button]) #self.title_label,
 
         # Number of nodes in pose estimation
         self.n_node_select = SpinBox(label = "Number of nodes")
@@ -80,11 +101,11 @@ class ExampleQWidget(Container):
         self.center_node_select.changed.connect(self.set_center_node)
 
         # file pickers
-        label_txt_picker = FileEdit(value='./Select a labeled txt file', tooltip = "Select labeled txt file")
-        label_h5_picker = FileEdit(value='./Select a labeled h5 file', tooltip = "Select labeled h5 file")
-        h5_picker = FileEdit(value='./Select a DLC h5 file', tooltip = "Select h5 file")
-        vid_picker = FileEdit(value='./Select the corresponding raw video', tooltip = "Select corresponding raw video")
-        self.extend([label_txt_picker, label_h5_picker, h5_picker, vid_picker])
+        label_txt_picker = FileEdit(label ="Select a labeled txt file", value='./', tooltip = "Select labeled txt file")
+        label_h5_picker = FileEdit(label ="Select a labeled h5 file", value='./', tooltip = "Select labeled h5 file")
+        h5_picker = FileEdit(label = "Select a DLC h5 file", value='./', tooltip = "Select h5 file")
+        vid_picker = FileEdit(label = "Select the corresponding raw video", value='./', tooltip = "Select corresponding raw video")
+        self.extend([h5_picker, vid_picker, label_h5_picker, label_txt_picker])
 
         # Behavioural extraction method
         self.behavioural_extract_method = ComboBox(label='Behaviour extraction method', choices = ["orth", "egocentric"],
@@ -97,7 +118,7 @@ class ExampleQWidget(Container):
         self.add_behaviour_from_selected_area_button = PushButton(label = "Add behaviour from selected area")
         self.add_behaviour_from_selected_area_button.clicked.connect(self.add_behaviour_from_selected_area)
         self.confidence_threshold_spinbox = FloatSpinBox(label = "Confidence Threshold", tooltip = "Change confidence threshold for pose estimation") 
-        self.amd_threshold_spinbox = SpinBox(label = "Movement Threshold", tooltip = "Change movement threshold for pose estimation") 
+        self.amd_threshold_spinbox = FloatSpinBox(label = "Movement Threshold", tooltip = "Change movement threshold for pose estimation") 
 
         self.amd_threshold = 2
         self.confidence_threshold = 0.8
@@ -119,7 +140,7 @@ class ExampleQWidget(Container):
         self.spinbox = SpinBox(label = "Behaviour Number", tooltip = "Change behaviour")
         self.ind_spinbox = SpinBox(label = "Individual Number", tooltip = "Change individual")
         
-        self.extend([self.n_node_select, self.center_node_select,self.confidence_threshold_spinbox, 
+        self.extend([self.confidence_threshold_spinbox, #self.n_node_select, self.center_node_select,
                      self.amd_threshold_spinbox, self.behavioural_extract_method, self.ind_spinbox,
                      self.extract_behaviour_button, self.add_behaviour_from_selected_area_button,
                      self.spinbox])
@@ -149,11 +170,90 @@ class ExampleQWidget(Container):
         self.labeled = False
         self.behaviours = []
         self.choices = []
-        
+        self.b_labels = None
+        self.decoder_data_dir = None
 
         self.add_1d_widget()
         self.viewer.dims.events.current_step.connect(self.update_slider)
+
+        ### infererence
+        self.batch_size_spinbox = SpinBox(label = "Batch Size", value = 16)
+        self.num_workers_spinbox = SpinBox(label = "Num Workers", value = 8)
+        self.lr_spinbox = FloatSpinBox(label = "Learning Rate", value = 0.01, step = 0.0000)
+        self.dropout_spinbox = FloatSpinBox(label = "Dropout", value = 0)
+        self.num_labels_spinbox = SpinBox(label = "Num labels", value = 0)
+        self.num_channels_spinbox = SpinBox(label = "Num channels", value = 3)
+
+        self.model_dropdown = ComboBox(label='Model type', choices = ["ZebLR", "Zeb2.0"],
+                                                  tooltip = "Select model for predicting behaviour")
+
+        self.chkpt_dropdown = ComboBox(label='Model type', choices = [],
+                                                  tooltip = "Select chkpt for predicting behaviour")
+        self.model_dropdown.changed.connect(self.populate_chkpt_dropdown)
+
+        self.analyse_button = PushButton(label = "Analyse")
+        self.analyse_button.clicked.connect(self.analyse)
+
+        self.train_button = PushButton(label = "Train")
+        self.train_button.clicked.connect(self.train)
+
+        self.finetune_button = PushButton(label = "Finetune")
+        #self.finetune_button.clicked.connect(self.train)
+
         
+
+        self.extend([self.batch_size_spinbox,self.lr_spinbox,  self.chkpt_dropdown,
+                    self.train_button, self.analyse_button, self.finetune_button ])#self.num_workers_spinbox,  self.dropout_spinbox,
+                     #self.num_labels_spinbox, self.num_channels_spinbox, self.model_dropdown,, 
+                     #])
+
+        
+    def decoder_dir_changed(self, value):
+        # Look for and load yaml configuration file
+        # load config
+        self.decoder_data_dir = value
+        print("Decoder Data Folder is {}".format(self.decoder_data_dir))
+        self.config_file = os.path.join(self.decoder_data_dir, "decoder_config.yml")
+
+        
+
+        try:
+
+            with open(self.config_file, 'r') as file:
+                self.config_data = yaml.safe_load(file)
+
+
+            n_nodes = self.config_data["data_cfg"]["V"]
+            center_node = self.config_data["data_cfg"]["center"]
+            self.set_center_node(center_node)
+            self.set_n_nodes(n_nodes)
+        except:
+            print("No configuration yaml located in decoder data folder")
+
+        self.populate_chkpt_dropdown() # load ckpt files if any
+
+        print("decoder config is {}".format(self.config_data))
+
+
+    
+    def populate_chkpt_dropdown(self):
+        # get all checkpoint files and allow user to select one
+
+        log_folder = os.path.join(self.decoder_data_dir, "lightning_logs")
+        version_folders = [version_folder for version_folder in os.listdir(log_folder) if "version" in version_folder]
+        
+        self.ckpt_files = []
+        for version_folder in version_folders:
+            version_folder_files = os.listdir(os.path.join(log_folder, version_folder))
+
+            for sub_file in version_folder_files:
+                if ".ckpt" in sub_file:
+                    ckpt_file = os.path.join(version_folder, sub_file)
+                    self.ckpt_files.append(ckpt_file)
+
+
+        self.chkpt_dropdown.choices = self.ckpt_files
+
 
     def update_slider(self, event):
         print("updating slider")
@@ -731,11 +831,11 @@ class ExampleQWidget(Container):
         self.last_behaviour = self.behaviour_no
         
         try:
-            choices = self.label_menu.choices
+            #choices = self.label_menu.choices
             self.viewer.layers.remove(self.shapes_layer)
             del self.shapes_layer
             # reset_choices as they seem to be forgotten when layers added or deleted
-            self.label_menu.choices = choices
+            self.label_menu.choices = self.choices
 
         except:
             print("no shape layer")
@@ -852,6 +952,10 @@ class ExampleQWidget(Container):
                     except:
                         pass
                     print(self.label_menu.choices)
+
+                if self.b_labels is not None:
+                    self.label_menu.value = self.b_labels[self.behaviour_no-1]
+                    print("Label score is {}".format(self.predictions.numpy()[self.behaviour_no-1]))
 
                 self.plot_behaving_region()
                 #self.update_classification()
@@ -972,4 +1076,503 @@ class ExampleQWidget(Container):
 
     def _on_click(self):
         print("napari has", len(self.viewer.layers), "layers")
+
+    def analyse(self, value):
+        self.preprocess_bouts() ## assumes behaviours extracted
+        self.predict_behaviours()
+        self.update_classification_data_with_predictions()
+
+
+    def preprocess_bouts(self):
+        # arrange in N, C, T, V format
+        self.zebdata = ZebData()
+        points = self.egocentric[:, :, 1:]
+        points = np.swapaxes(points, 0, 2)
+        ci_array = self.ci.to_numpy()
+        ci_array = ci_array.reshape((*ci_array.shape, 1))
+        cis = np.swapaxes(ci_array, 0, 2)
+
+        # N, C, T, V, M - don't ignore confidence interval but give option of removing 
+        N = len(self.behaviours)
+        C = self.config_data["train_cfg"]["num_channels"]
+        T2 = self.config_data["data_cfg"]["T2"]
+        denominator = self.config_data["data_cfg"]["denominator"]
+        T_method = self.config_data["data_cfg"]["T"]
+        fps = self.config_data["data_cfg"]["fps"]
+
+        if T_method == "window":
+            T = 2 * int(fps/denominator)
+
+        elif type(T_method) == "int":
+            T = T_method # these methods assume behaviours last the same amount of time -which is a big assumption
+
+        V = points.shape[2]
+        M = 1
+
+        bouts = np.zeros((N, C, T, V, M))
+        padded_bouts = np.zeros((N, C, T2, V, M))
+
+        # loop through movement windows when behaviour occuring 
+        for n,  (bhv_start, bhv_end) in enumerate(self.behaviours):
+
+            # focus on window of size tsne window around peak of movement
+            bhv_mid = bhv_start + ((bhv_end - bhv_start)/2)
+            new_start = int(bhv_mid - int(T/2)) # might be worth refining self behaviours from here
+            new_end = int(bhv_mid + int(T/2))
+            new_end = (T- (new_end-new_start)) + new_end # this adds any difference if not exactly T in length
+
+            #self.behaviours[n] = (new_start, new_end)
+
+            bhv = points[:, new_start:new_end]
+            ci = cis[:, new_start:new_end]
+            ci = ci.reshape((*ci.shape, 1))
+                        
+            # switch to x, y from y, x
+            bhv_rs = bhv.copy()
+            bhv_rs[1] = bhv[0]
+            bhv_rs[0] = bhv[1]
+            bhv = bhv_rs
+                        
+            # reflect y to convert to cartesian friendly coordinate system - is this needed if coordinates are egocentric?
+            bhv = bhv.reshape((*bhv.shape, 1)) # reshape to N, C, T, V, M
+            y_mirror = np.array([[1, 0],
+                                [0, -1]])
+                               
+            for frame in range(bhv.shape[1]):
+                bhv[:2, frame] = (bhv[:2, frame].T @ y_mirror).T
+                        
+
+            # align function takes shape N, C, T, V, M
+            bhv_align = self.zebdata.align(bhv)
+            
+                        
+            bouts[n, :2] = bhv_align
+            bouts[n,  2] = ci[0]
+
+            padded_bouts[n] =  self.zebdata.pad(bouts[n], 300)
+
+            
+        self.zebdata.data = padded_bouts
+        self.zebdata.labels = np.zeros(padded_bouts.shape[0])
+
+    def predict_behaviours(self):
+
+        # create dataloader from preprocess swims
+
+        self.numlabels = self.config_data["data_cfg"]["numLabels"]
+        self.devices = self.config_data["train_cfg"]["devices"]
+        self.auto_lr = self.config_data["train_cfg"]["auto_lr"]
+        self.accelerator = self.config_data["train_cfg"]["accelerator"]
+        self.graph_layout = self.config_data["train_cfg"]["graph_layout"]
+        self.dropout = self.config_data["train_cfg"]["dropout"]
+        self.numChannels = self.config_data["train_cfg"]["num_channels"]
+        self.num_workers = self.config_data["train_cfg"]["num_workers"]
+
+        
+        # create dataloader from preprocess swims
+        self.batch_size = self.batch_size_spinbox.value # spinbox
+        #self.num_workers = self.num_workers_spinbox.value # spinbox
+        self.lr = self.lr_spinbox.value # spinbox
+        #self.dropout = self.dropout_spinbox.value # spinbox
+        
+        # assign model parameters
+        PATH_DATASETS = self.decoder_data_dir
+        #self.numlabels = self.num_labels_spinbox.value # spinbox
+        #self.numChannels = self.num_channels_spinbox.value # X, Y and CI - spinbox
+       
+        
+        # assign model parameters
+        PATH_DATASETS = self.decoder_data_dir
+        
+        
+
+        data_cfg = { 'data_dir': PATH_DATASETS,
+                    'augment': False,
+                    'ideal_sample_no' : None,
+                    'shift' : False}
+
+        graph_cfg = {"layout":self.graph_layout}
+
+        hparams = HyperParams(self.batch_size, self.lr, self.dropout)
+
+        data_loader = DataLoader(self.zebdata, batch_size = self.batch_size, num_workers = self.num_workers, pin_memory = False)
+        
+        # load model check point, 
+        log_folder = os.path.join(self.decoder_data_dir, "lightning_logs")
+        self.chkpt =  os.path.join(log_folder, self.self.chkpt_dropdown.value)  # spinbox
+
+        model = st_gcn_aaai18_pylightning_3block.ST_GCN_18(in_channels = self.numChannels, 
+                                                   num_class = self.numlabels, 
+                                                   graph_cfg = graph_cfg, 
+                                                   data_cfg = data_cfg, 
+                                                   hparams = hparams).load_from_checkpoint(self.chkpt, 
+                                                                                           in_channels = self.numChannels, 
+                                                                                           num_class = self.numlabels, 
+                                                                                           graph_cfg = graph_cfg, 
+                                                                                           data_cfg = data_cfg,
+                                                                                           hparams = hparams)
+
+
+        # create trainer object, 
+        ## optimise trainer to just predict as currently its preparing data thinking its training
+        # predict
+        trainer = Trainer(devices=self.devices, accelerator = self.accelerator)
+        predictions = trainer.predict(model, data_loader) # returns a list of the processed batches
+        self.predictions = torch.concat(predictions, dim = 0)
+        print(self.predictions)
+
+    def update_classification_data_with_predictions(self):
+
+        label_dict = self.config_data["data_cfg"]["classification_dict"]
+
+        # add predictions to classification data
+        #if self.model_dropdown.value == "ZebLR":
+        #    label_dict = {0 : "forward",
+        #                  1: "left",
+        #                  2: "right"}
+        #
+        preds = torch.argmax(self.predictions, dim=1).numpy()
+
+        print(type(preds))
+        print("predictions is {}".format(preds))
+
+        self.b_labels = pd.Series(preds).map(label_dict).to_numpy()
+        print(self.b_labels)
+            
+        self.choices = tuple(label_dict.values())
+        self.label_menu.choices = self.choices
+
+        # maybe loop and create new classification_data
+
+    def convert_classification_files(self, train_files):
+        # use folder and convert classification files 
+        train_bouts = []
+        train_labels = []
+        
+
+        classification_files = [tb.open_file(file, mode = "r") for file in train_files]
+        for file in classification_files:
+            classification_data = self.read_classification_h5(file)
+            C = self.config_data["train_cfg"]["num_channels"] #3 # publicise these
+            V = self.config_data["data_cfg"]["V"] #    19
+            M = 1
+            fps = self.config_data["data_cfg"]["fps"] # 330.
+            denominator = self.config_data["data_cfg"]["fps"] #8
+
+            T_method = self.config_data["data_cfg"]["T"]
+            
+
+            if T_method == "window":
+                T = 2 * int(fps/denominator)
+
+            elif type(T_method) == "int":
+                T = T_method # these methods assume behaviours last the same amount of time -which is a big assumption
+
+
+            center = self.config_data["data_cfg"]["center"]
+            T2 = self.config_data["data_cfg"]["T2"]
+
+            all_bouts, all_labels = self.classification_data_to_bouts(classification_data, C, T, V, M, center= center, T2= T2)
+            train_bouts.append(all_bouts)
+            train_labels.append(all_labels)
+
+        train_bouts = np.concatenate(train_bouts)
+        train_labels = np.array([item for sublist in train_labels for item in sublist])
+
+
+        return train_bouts, train_labels
+
+    def train(self):
+        #self.decoder_data_dir = self.decoder_dir_picker.value
+        # Load prepare data
+        if os.path.exists(os.path.join(self.decoder_data_dir, "Zebtrain.npy")):
+            print("Data Prepared")
+           
+
+        else:
+            print("Preparing Data")
+            # Prepare and save data
+            # take one datafolder and 
+            all_files = [os.path.join(self.decoder_data_dir, file) for file in os.listdir(self.decoder_data_dir) if "classification.h5" in file]
+            nfiles= len(all_files)
+
+            train_proportion = int(0.85 * nfiles)
+
+            self.train_files = all_files[: train_proportion]
+            self.test_files = all_files[train_proportion:]
+
+
+            self.train_data,self.train_labels = self.convert_classification_files(self.train_files)
+            self.test_data, self.test_labels = self.convert_classification_files(self.test_files)
+            
+            # drop unclassified
+            good_train_idx = np.where(self.train_labels != "unclassified")[0]
+            good_test_idx = np.where(self.test_labels != "unclassified")[0]
+
+            self.train_data, self.train_labels = self.train_data[good_train_idx], self.train_labels[good_train_idx]
+            self.test_data, self.test_labels = self.test_data[good_test_idx], self.test_labels[good_test_idx]
+
+            label_dict = {k:v for v, k in enumerate(np.unique(self.train_labels))}
+            print("Label dict is {}".format(label_dict))
+
+            self.train_labels = pd.Series(self.train_labels).map(label_dict).to_numpy()
+            self.test_labels = pd.Series(self.test_labels).map(label_dict).to_numpy()
+
+            np.save(os.path.join(self.decoder_data_dir, "label_dict.npy"), label_dict)
+
+
+            np.save(os.path.join(self.decoder_data_dir, "Zebtrain.npy"), self.train_data)
+            np.save(os.path.join(self.decoder_data_dir, "Zebtrain_labels.npy"), self.train_labels)
+            np.save(os.path.join(self.decoder_data_dir, "Zebtest.npy"), self.test_data)
+            np.save(os.path.join(self.decoder_data_dir, "Zebtest_labels.npy"), self.test_labels)
+
+            print("Data Prepared and Save at {}".format(self.decoder_data_dir))
+
+        # train 
+
+        
+
+        self.numlabels = self.config_data["data_cfg"]["numLabels"]
+        self.devices = self.config_data["train_cfg"]["devices"]
+        self.auto_lr = self.config_data["train_cfg"]["auto_lr"]
+        self.accelerator = self.config_data["train_cfg"]["accelerator"]
+        self.graph_layout = self.config_data["train_cfg"]["graph_layout"]
+        self.dropout = self.config_data["train_cfg"]["dropout"]
+        self.numChannels = self.config_data["train_cfg"]["num_channels"]
+        self.num_workers = self.config_data["train_cfg"]["num_workers"]
+
+        
+        # create dataloader from preprocess swims
+        self.batch_size = self.batch_size_spinbox.value # spinbox
+        #self.num_workers = self.num_workers_spinbox.value # spinbox
+        self.lr = self.lr_spinbox.value # spinbox
+        #self.dropout = self.dropout_spinbox.value # spinbox
+        
+        # assign model parameters
+        PATH_DATASETS = self.decoder_data_dir
+        #self.numlabels = self.num_labels_spinbox.value # spinbox
+        #self.numChannels = self.num_channels_spinbox.value # X, Y and CI - spinbox
+        
+
+        data_cfg = { 'data_dir': PATH_DATASETS,
+                    'augment': False,
+                    'ideal_sample_no' : None,
+                    'shift' : False}
+
+        graph_cfg = {"layout":self.graph_layout}
+
+        hparams = HyperParams(self.batch_size, self.lr, self.dropout)
+
+        # create trainer object, 
+        ## optimise trainer to just predict as currently its preparing data thinking its training
+        # predict
+        for n in range(4): # does ths reuse model in current state?
+            model = st_gcn_aaai18_pylightning_3block.ST_GCN_18(in_channels = self.numChannels, 
+                                                   num_class = self.numlabels, 
+                                                   graph_cfg = graph_cfg, 
+                                                   data_cfg = data_cfg, 
+                                                   hparams = hparams)
+
+
+        
+
+            print("trial is {}".format(n))
+
+            TTLogger = TensorBoardLogger(save_dir = self.decoder_data_dir)
+            early_stop = EarlyStopping(monitor="val_loss", mode="min", patience = 5)
+            swa = StochasticWeightAveraging(swa_lrs=1e-2)
+
+            log_folder = os.path.join(self.decoder_data_dir, "lightning_logs")
+            if os.path.exists(log_folder):
+                if len(os.listdir(log_folder)) > 0:
+                    version_folders = [version_folder for version_folder in os.listdir(log_folder) if "version" in version_folder]
+                    latest_version_number = max([int(version_folder.split("_")[-1]) for version_folder in version_folders]) # this is not working quite right not selectin latest folder
+                    print("latest version folder is {}".format(latest_version_number))
+                    new_version_number = latest_version_number + 1
+                    new_version_folder = os.path.join(log_folder, "version_{}".format(new_version_number))
+                    print(new_version_folder)
+
+                else:
+                    new_version_folder = os.path.join(log_folder, "version_0")
+
+            else:
+                new_version_folder = os.path.join(log_folder, "version_0")
+
+            print("new version folder is {}".format(new_version_folder))
+
+
+            checkpoint_callback = ModelCheckpoint(
+            monitor="val_loss",
+            dirpath= new_version_folder,
+            filename="{epoch}-{val_loss:.2f}-{val_acc:.2f}",
+            save_top_k=1,        # save the best model
+            mode="min",
+            every_n_epochs=1
+            )
+
+            ## Run this 4 times and select best model - fine tune that
+
+        
+
+            trainer = Trainer(logger = TTLogger,
+                devices = 1, accelerator = "gpu",
+                max_epochs=100,
+                callbacks = [early_stop, checkpoint_callback], auto_lr_find=True)#, stochastic_weight_avg=True) - this is a callback in latest lightning-, swa -swa messes up auto lr
+
+            trainer.tune(model)
+
+            trainer.fit(model)
+
+            print("Finished Training - best model is {}".format(checkpoint_callback.best_model_path)) 
+        # Add finetune - freeze model-replace last layer and train
+
+
+    def finetune(self):
+
+        # load best checkpoint
+
+        # freeze model
+        #model.fcn = nn.Conv2d(256, num_class, kernel_size=1)
+        pass
+
+    def find_best_models(self):
+        # loop through version folders in log folder
+        log_folder = os.path.join(self.decoder_data_dir, "lightning_logs")
+        version_folders = [version_folder for version_folder in os.listdir(log_folder) if "version" in version_folder]
+        
+        ckpt_files = []
+        for version_folder in version_folders:
+            version_folder_files = os.listdir(os.path.join(log_folder, version_folder))
+            ckpt_file = []
+
+
+    
+    def read_classification_h5(self, file):
+        
+        classification_data = {}
+        for group in file.root.__getattr__("_v_groups"):
+            ind = file.root[group]
+            behaviour_dict = {}
+            arrays = {}
+
+            for array in file.list_nodes(ind, classname='Array'):
+                arrays[int(array.name)] = array
+            tables = []
+
+            for table in file.list_nodes(ind, classname="Table"):
+                tables.append(table)
+
+            behaviours = []
+            classifications = []
+            starts = []
+            stops = []
+            cis = []
+            for row in tables[0].iterrows():
+                behaviours.append(row["number"])
+                classifications.append(row["classification"])
+                starts.append(row["start"])
+                stops.append(row["stop"])
+
+
+
+
+
+            for (behaviour, classification, start, stop) in (zip(behaviours, classifications, starts, stops)):
+            
+                    class_dict = {"classification": classification.decode('utf-8'),
+                                    "coords" : arrays[behaviour][:, :3], 
+                                     "start" : start,
+                                     "stop" : stop,
+                                     "ci" : arrays[behaviour][:, 3]}
+                    behaviour_dict[behaviour+1] = class_dict
+            
+            classification_data[int(group)] = behaviour_dict
+        return classification_data
+
+
+
+
+    def classification_data_to_bouts(self, classification_data, C, T, V, M, center = None, T2 = None):
+        print(type(classification_data))
+        all_ind_bouts = [] 
+        all_labels = []
+        for ind in classification_data.keys():
+            behaviour_dict = classification_data[ind] 
+            N = len(behaviour_dict.keys())
+            if T2 is None:
+                bout_data = np.zeros((N, C, T, V, M))
+            else:
+                bout_data = np.zeros((N, C, T2, V, M))
+            bout_labels = []
+            for bout_idx, bout in enumerate(behaviour_dict.keys()):
+
+                # get coords
+                coords = behaviour_dict[bout]["coords"]
+
+                # reshape coords to V, T, (frame, Y, X)
+                coords_reshaped = coords.reshape(V, -1, 3)
+
+                # get ci
+                ci =  behaviour_dict[bout]["ci"]
+                ci_reshaped = ci.reshape(V, -1, 1)
+
+                # subset behaviour from the middle out
+                # focus on window of size tsne window around peak of movement
+            
+
+                mid_idx = int(coords_reshaped.shape[1]/2)
+                new_start =int( mid_idx - int(T/2))
+                new_end = int(mid_idx + int(T/2))
+                new_end = (T- (new_end-new_start)) + new_end # this adds any difference if not exactly T in length
+
+                coords_subset = coords_reshaped[:, new_start:new_end]
+                ci_subset = ci_reshaped[:, new_start:new_end]
+            
+                # reshape from V, T, C to C, T, V
+                swapped_coords = np.swapaxes(coords_subset, 0, 2)
+                new_bout = np.zeros(swapped_coords.shape)
+                swapped_ci = np.swapaxes(ci_subset, 0, 2)
+
+                new_bout[0] = swapped_coords[2] # x
+                new_bout[1] = swapped_coords[1]# y
+                new_bout[2] = swapped_ci[0] # ci
+            
+                # reflect y to convert to cartesian friendly coordinate system
+                new_bout = new_bout.reshape((*new_bout.shape, M)) # reshape to N, C, T, V, M
+                y_mirror = np.array([[1, 0],
+                                    [0, -1]])
+
+                for frame in range(new_bout.shape[1]):
+                    new_bout[:2, frame] = (new_bout[:2, frame].T @ y_mirror).T
+                
+                # align, pad, 
+            
+                zebdata = ZebData()
+            
+                if (center != None) & (T2 != None):
+                
+                    centered_bout = zebdata.center_all(new_bout, center)
+                    aligned_bout = zebdata.align(centered_bout)
+                    padded_bout = zebdata.pad(aligned_bout, T2)
+                    new_bout = padded_bout
+    
+
+                bout_data[bout_idx] = new_bout
+                label = behaviour_dict[bout]["classification"]
+                bout_labels.append(label)
+            
+            all_ind_bouts.append(bout_data)
+            all_labels.append(bout_labels)
+    
+        all_ind_bouts = np.concatenate(all_ind_bouts)
+        all_labels = np.array(all_labels).flatten()
+    
+        return all_ind_bouts, all_labels
+
+
+
+
+
+
+
 

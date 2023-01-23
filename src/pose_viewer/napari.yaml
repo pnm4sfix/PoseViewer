@@ -5,6 +5,12 @@ contributions:
     - id: pose-viewer.make_qwidget
       python_name: pose_viewer._widget:ExampleQWidget
       title: Make example QWidget
+    - id: pose-viewer.make_hparams
+      python_name: pose_viewer.loader:ZebData
+      title: Make example QWidget
+    - id: pose-viewer.make_dataset
+      python_name: pose_viewer.loader:HyperParams
+      title: Make example QWidget
 
   widgets:
     - command: pose-viewer.make_qwidget

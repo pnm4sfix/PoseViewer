@@ -3,6 +3,8 @@ try:
 except ImportError:
     __version__ = "unknown"
 from ._widget import ExampleQWidget
+from ._loader import HyperParams
+from ._loader import ZebData
 
 __all__ = (
     "ExampleQWidget"
