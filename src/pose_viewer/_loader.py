@@ -182,11 +182,14 @@ class ZebData(torch.utils.data.Dataset):
             diff = new_T - bhv_pad.shape[1]
             bhv_pad = np.concatenate((bhv_pad, pose[:, :diff]), axis = 1)
 
-        elif (ratio<1) & (ratio>0):
+        elif (ratio<=1) & (ratio>0):
             diff = new_T - pose.shape[1]
             bhv_pad = np.concatenate((pose, pose[:, :diff]), axis = 1)
-        elif ratio < 0:
+        elif ratio <= 0:
             bhv_pad = pose[:, :new_T]
+
+        
+            
 
         return bhv_pad
     
@@ -222,7 +225,8 @@ class ZebData(torch.utils.data.Dataset):
                 augmented = np.zeros((self.ideal_sample_no +label_count, *label_subset.shape[1:]))
 
                 if label_count <100: # this drops rare behaviours
-                    drop_labels.append(v)
+                    #drop_labels.append(v)
+                    pass
 
                 elif label_count > self.ideal_sample_no:
 

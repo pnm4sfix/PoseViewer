@@ -39,6 +39,7 @@ from pytorch_lightning.callbacks.stochastic_weight_avg import StochasticWeightAv
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.callbacks import ModelCheckpoint
 import yaml
+import torch.nn as nn
 
 import pims
 import tables as tb
@@ -198,7 +199,7 @@ class ExampleQWidget(Container):
         self.train_button.clicked.connect(self.train)
 
         self.finetune_button = PushButton(label = "Finetune")
-        #self.finetune_button.clicked.connect(self.train)
+        self.finetune_button.clicked.connect(self.finetune)
 
         
 
@@ -240,16 +241,20 @@ class ExampleQWidget(Container):
         # get all checkpoint files and allow user to select one
 
         log_folder = os.path.join(self.decoder_data_dir, "lightning_logs")
-        version_folders = [version_folder for version_folder in os.listdir(log_folder) if "version" in version_folder]
+        if os.path.exists(log_folder):
+            version_folders = [version_folder for version_folder in os.listdir(log_folder) if "version" in version_folder]
         
-        self.ckpt_files = []
-        for version_folder in version_folders:
-            version_folder_files = os.listdir(os.path.join(log_folder, version_folder))
+            self.ckpt_files = []
+            for version_folder in version_folders:
+                version_folder_files = os.listdir(os.path.join(log_folder, version_folder))
 
-            for sub_file in version_folder_files:
-                if ".ckpt" in sub_file:
-                    ckpt_file = os.path.join(version_folder, sub_file)
-                    self.ckpt_files.append(ckpt_file)
+                for sub_file in version_folder_files:
+                    if ".ckpt" in sub_file:
+                        ckpt_file = os.path.join(version_folder, sub_file)
+                        self.ckpt_files.append(ckpt_file)
+
+        else:
+            self.ckpt_files = []
 
 
         self.chkpt_dropdown.choices = self.ckpt_files
@@ -1199,7 +1204,7 @@ class ExampleQWidget(Container):
         
         # load model check point, 
         log_folder = os.path.join(self.decoder_data_dir, "lightning_logs")
-        self.chkpt =  os.path.join(log_folder, self.self.chkpt_dropdown.value)  # spinbox
+        self.chkpt =  os.path.join(log_folder, self.chkpt_dropdown.value)  # spinbox
 
         model = st_gcn_aaai18_pylightning_3block.ST_GCN_18(in_channels = self.numChannels, 
                                                    num_class = self.numlabels, 
@@ -1257,7 +1262,7 @@ class ExampleQWidget(Container):
             V = self.config_data["data_cfg"]["V"] #    19
             M = 1
             fps = self.config_data["data_cfg"]["fps"] # 330.
-            denominator = self.config_data["data_cfg"]["fps"] #8
+            denominator = self.config_data["data_cfg"]["denominator"] #8
 
             T_method = self.config_data["data_cfg"]["T"]
             
@@ -1268,11 +1273,15 @@ class ExampleQWidget(Container):
             elif type(T_method) == "int":
                 T = T_method # these methods assume behaviours last the same amount of time -which is a big assumption
 
+            elif T_method == "None":
+                # ragged nest, T should be max length and everything padded to that
+                T = None # T2 should be specified to ensure same length
+
 
             center = self.config_data["data_cfg"]["center"]
             T2 = self.config_data["data_cfg"]["T2"]
-
-            all_bouts, all_labels = self.classification_data_to_bouts(classification_data, C, T, V, M, center= center, T2= T2)
+            align = self.config_data["data_cfg"]["align"]
+            all_bouts, all_labels = self.classification_data_to_bouts(classification_data, C, T, V, M, center= center, T2= T2, align=align)
             train_bouts.append(all_bouts)
             train_labels.append(all_labels)
 
@@ -1305,20 +1314,48 @@ class ExampleQWidget(Container):
             self.train_data,self.train_labels = self.convert_classification_files(self.train_files)
             self.test_data, self.test_labels = self.convert_classification_files(self.test_files)
             
-            # drop unclassified
-            good_train_idx = np.where(self.train_labels != "unclassified")[0]
-            good_test_idx = np.where(self.test_labels != "unclassified")[0]
+            # drop labels to ignore
+            labels_to_ignore = self.config_data["data_cfg"]["labels_to_ignore"]
+            print("Labels to ignore are {}".format(labels_to_ignore))
+            good_train_idx = np.where(~np.isin(self.train_labels, labels_to_ignore))[0]
+            good_test_idx = np.where(~np.isin(self.test_labels, labels_to_ignore))[0]
+            print("Subset of train labels ignoring some labels {}".format(self.train_labels[good_train_idx[:10]]))
+            # check if any labels to ignore are still in 
+            print("Unique labels are {}".format(np.unique(self.train_labels)))
+
 
             self.train_data, self.train_labels = self.train_data[good_train_idx], self.train_labels[good_train_idx]
             self.test_data, self.test_labels = self.test_data[good_test_idx], self.test_labels[good_test_idx]
 
-            label_dict = {k:v for v, k in enumerate(np.unique(self.train_labels))}
-            print("Label dict is {}".format(label_dict))
+            self.class_dict = self.config_data["data_cfg"]["classification_dict"]
+            self.label_dict = {v:k for k, v in self.class_dict.items()}
+            #label_dict = {k:v for v, k in enumerate(np.unique(self.train_labels))}
+            print("Label dict is {}".format(self.label_dict))
 
-            self.train_labels = pd.Series(self.train_labels).map(label_dict).to_numpy()
-            self.test_labels = pd.Series(self.test_labels).map(label_dict).to_numpy()
+            self.train_labels = pd.Series(self.train_labels).map(self.label_dict).to_numpy()
+            self.test_labels = pd.Series(self.test_labels).map(self.label_dict).to_numpy()
 
-            np.save(os.path.join(self.decoder_data_dir, "label_dict.npy"), label_dict)
+            # check if any labels to ignore are still in 
+            print("Unique labels are {}".format(np.unique(self.train_labels)))
+            print("Label_counts are {}".format(pd.Series(self.train_labels).value_counts()))
+
+            print("Training Data Shape is {}".format(self.train_data.shape))
+            print("Test Data Shape is {}".format(self.test_data.shape))
+
+            #np.save(os.path.join(self.decoder_data_dir, "label_dict.npy"), self.label_dict)
+            self.augmentation = self.config_data["data_cfg"]["augmentation"]
+            if self.augmentation is not False:
+                zebdata = ZebData()
+                zebdata.data = self.train_data
+                zebdata.labels = self.train_labels
+                zebdata.ideal_sample_no = self.augmentation
+                zebdata.dynamic_augmentation()
+
+                self.train_data = zebdata.data
+                self.train_labels = zebdata.labels
+
+                print("Augmented Training Data Shape is {}".format(self.train_data.shape))
+
 
 
             np.save(os.path.join(self.decoder_data_dir, "Zebtrain.npy"), self.train_data)
@@ -1433,6 +1470,123 @@ class ExampleQWidget(Container):
 
         # freeze model
         #model.fcn = nn.Conv2d(256, num_class, kernel_size=1)
+        # create model
+        # load checkpoint
+        # set all layers to grad = False
+        # change configure optimised in st -gcn backbone
+        # train
+
+        self.numlabels = self.config_data["data_cfg"]["numLabels"]
+        self.devices = self.config_data["train_cfg"]["devices"]
+        self.auto_lr = self.config_data["train_cfg"]["auto_lr"]
+        self.accelerator = self.config_data["train_cfg"]["accelerator"]
+        self.graph_layout = self.config_data["train_cfg"]["graph_layout"]
+        self.dropout = self.config_data["train_cfg"]["dropout"]
+        self.numChannels = self.config_data["train_cfg"]["num_channels"]
+        self.num_workers = self.config_data["train_cfg"]["num_workers"]
+
+        
+        # create dataloader from preprocess swims
+        self.batch_size = self.batch_size_spinbox.value # spinbox
+        #self.num_workers = self.num_workers_spinbox.value # spinbox
+        self.lr = self.lr_spinbox.value # spinbox
+        #self.dropout = self.dropout_spinbox.value # spinbox
+        
+        # assign model parameters
+        PATH_DATASETS = self.decoder_data_dir
+        #self.numlabels = self.num_labels_spinbox.value # spinbox
+        #self.numChannels = self.num_channels_spinbox.value # X, Y and CI - spinbox
+        
+
+        data_cfg = { 'data_dir': PATH_DATASETS,
+                    'augment': False,
+                    'ideal_sample_no' : None,
+                    'shift' : False}
+
+        graph_cfg = {"layout":self.graph_layout}
+
+        hparams = HyperParams(self.batch_size, self.lr, self.dropout)
+
+        
+        log_folder = os.path.join(self.decoder_data_dir, "lightning_logs")
+        self.chkpt =  os.path.join(log_folder, self.chkpt_dropdown.value)  # spinbox
+
+        for n in range(4): # does ths reuse model in current state?
+            model = st_gcn_aaai18_pylightning_3block.ST_GCN_18(in_channels = self.numChannels, 
+                                                   num_class = self.numlabels, 
+                                                   graph_cfg = graph_cfg, 
+                                                   data_cfg = data_cfg, 
+                                                   hparams = hparams).load_from_checkpoint(self.chkpt, 
+                                                                                           in_channels = self.numChannels, 
+                                                                                           num_class = self.numlabels, 
+                                                                                           graph_cfg = graph_cfg, 
+                                                                                           data_cfg = data_cfg,
+                                                                                           hparams = hparams)
+
+
+        
+            # freeze model layers
+            for param in model.parameters():
+                param.requires_grad = False
+
+            print(model.parameters)
+
+            # add new model.fcn 
+            model.fcn = nn.Conv2d(256, self.numlabels, kernel_size=1)
+
+            for param in model.parameters():
+                if param.requires_grad:
+                    print("param {} requires grad".format(param))
+
+
+            print("trial is {}".format(n))
+
+            TTLogger = TensorBoardLogger(save_dir = self.decoder_data_dir)
+            early_stop = EarlyStopping(monitor="val_loss", mode="min", patience = 5)
+            swa = StochasticWeightAveraging(swa_lrs=1e-2)
+
+            if os.path.exists(log_folder):
+                if len(os.listdir(log_folder)) > 0:
+                    version_folders = [version_folder for version_folder in os.listdir(log_folder) if "version" in version_folder]
+                    latest_version_number = max([int(version_folder.split("_")[-1]) for version_folder in version_folders]) # this is not working quite right not selectin latest folder
+                    print("latest version folder is {}".format(latest_version_number))
+                    new_version_number = latest_version_number + 1
+                    new_version_folder = os.path.join(log_folder, "version_{}".format(new_version_number))
+                    print(new_version_folder)
+
+                else:
+                    new_version_folder = os.path.join(log_folder, "version_0")
+
+            else:
+                new_version_folder = os.path.join(log_folder, "version_0")
+
+            print("new version folder is {}".format(new_version_folder))
+
+
+            checkpoint_callback = ModelCheckpoint(
+            monitor="val_loss",
+            dirpath= new_version_folder,
+            filename="{epoch}-{val_loss:.2f}-{val_acc:.2f}",
+            save_top_k=1,        # save the best model
+            mode="min",
+            every_n_epochs=1
+            )
+
+            ## Run this 4 times and select best model - fine tune that
+
+        
+
+            trainer = Trainer(logger = TTLogger,
+                devices = 1, accelerator = "gpu",
+                max_epochs=100,
+                callbacks = [early_stop, checkpoint_callback], auto_lr_find=True)#, stochastic_weight_avg=True) - this is a callback in latest lightning-, swa -swa messes up auto lr
+
+            trainer.tune(model)
+
+            trainer.fit(model)
+
+            print("Finished Finetuning - best model is {}".format(checkpoint_callback.best_model_path)) 
+        
         pass
 
     def find_best_models(self):
@@ -1492,14 +1646,15 @@ class ExampleQWidget(Container):
 
 
 
-    def classification_data_to_bouts(self, classification_data, C, T, V, M, center = None, T2 = None):
+    def classification_data_to_bouts(self, classification_data, C, T, V, M, center = None, T2 = None, align = None):
         print(type(classification_data))
         all_ind_bouts = [] 
         all_labels = []
         for ind in classification_data.keys():
             behaviour_dict = classification_data[ind] 
             N = len(behaviour_dict.keys())
-            if T2 is None:
+            
+            if (T2 == "None") | (T2 is None):
                 bout_data = np.zeros((N, C, T, V, M))
             else:
                 bout_data = np.zeros((N, C, T2, V, M))
@@ -1512,6 +1667,8 @@ class ExampleQWidget(Container):
                 # reshape coords to V, T, (frame, Y, X)
                 coords_reshaped = coords.reshape(V, -1, 3)
 
+                print(coords_reshaped.shape)
+
                 # get ci
                 ci =  behaviour_dict[bout]["ci"]
                 ci_reshaped = ci.reshape(V, -1, 1)
@@ -1519,18 +1676,30 @@ class ExampleQWidget(Container):
                 # subset behaviour from the middle out
                 # focus on window of size tsne window around peak of movement
             
+                if T == None:
+                    # take behaviour as is 
+                    # pad to T2
+                    print("T  is none")
+                    coords_subset = coords_reshaped
+                    ci_subset = ci_reshaped
 
-                mid_idx = int(coords_reshaped.shape[1]/2)
-                new_start =int( mid_idx - int(T/2))
-                new_end = int(mid_idx + int(T/2))
-                new_end = (T- (new_end-new_start)) + new_end # this adds any difference if not exactly T in length
+                else:
 
-                coords_subset = coords_reshaped[:, new_start:new_end]
-                ci_subset = ci_reshaped[:, new_start:new_end]
+
+                    mid_idx = int(coords_reshaped.shape[1]/2)
+                    new_start =int( mid_idx - int(T/2))
+                    new_end = int(mid_idx + int(T/2))
+                    new_end = (T- (new_end-new_start)) + new_end # this adds any difference if not exactly T in length
+
+                    coords_subset = coords_reshaped[:, new_start:new_end]
+                    print(new_start, new_end)
+                    print(coords_subset.shape)
+                    ci_subset = ci_reshaped[:, new_start:new_end]
             
                 # reshape from V, T, C to C, T, V
                 swapped_coords = np.swapaxes(coords_subset, 0, 2)
                 new_bout = np.zeros(swapped_coords.shape)
+                print(new_bout.shape)
                 swapped_ci = np.swapaxes(ci_subset, 0, 2)
 
                 new_bout[0] = swapped_coords[2] # x
@@ -1549,12 +1718,19 @@ class ExampleQWidget(Container):
             
                 zebdata = ZebData()
             
-                if (center != None) & (T2 != None):
-                
-                    centered_bout = zebdata.center_all(new_bout, center)
-                    aligned_bout = zebdata.align(centered_bout)
-                    padded_bout = zebdata.pad(aligned_bout, T2)
-                    new_bout = padded_bout
+                if center != "None":
+                    print("centering bout on center {}".format(center))
+                    new_bout = zebdata.center_all(new_bout, center)
+                    #new_bout = centered_bout.copy()
+
+                if align:
+                    print("aligning bout")
+                    new_bout = zebdata.align(new_bout)
+
+                if T2 != "None": 
+                    print("padding bout, original size was {}, new T is {}".format(new_bout.shape, T2))
+                    new_bout = zebdata.pad(new_bout, T2)
+                    
     
 
                 bout_data[bout_idx] = new_bout

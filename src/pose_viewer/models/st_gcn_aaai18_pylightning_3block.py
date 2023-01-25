@@ -142,8 +142,11 @@ class ST_GCN_18(LightningModule):
         return x
     
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr = self.learning_rate)
-        return optimizer
+        # Make sure to filter the parameters based on `requires_grad`
+        
+        return torch.optim.Adam(filter(lambda p: p.requires_grad, self.parameters()), lr = self.learning_rate)
+        #optimizer = torch.optim.Adam(self.parameters(), lr = self.learning_rate)
+        #return optimizer
     
     def training_step(self, batch, batch_idx):
         #Make sure dataloaders are on cuda
