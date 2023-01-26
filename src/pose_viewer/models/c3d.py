@@ -89,7 +89,7 @@ class C3D(LightningModule):
 
         #self.conv_layer2 = self._conv_layer_set(32, 64)
 
-        self.fc1 = nn.Linear(739840, 2048)
+        self.fc1 = nn.Linear(32000, 2048)
         self.fc2 = nn.Linear(2048, self.num_classes)
         self.relu = nn.LeakyReLU()
         #self.batch=nn.BatchNorm1d(128)

@@ -113,6 +113,7 @@ class ZebData(torch.utils.data.Dataset):
                 behaviour = torch.from_numpy(behaviour).to(torch.float32)
 
             if self.transform == "heatmap":
+                #print("transforming")
                 behaviour = self.convert_bout_to_heatmap(behaviour, self.W, self.H, self.xv, self.yv)
                 behaviour = torch.from_numpy(behaviour).to(torch.float32)
         
@@ -366,14 +367,14 @@ class ZebData(torch.utils.data.Dataset):
 
         return sheared
 
-    @staticmethod
-    @jit
-    def convert_bout_to_heatmap(bout, W, H, xv, yv):
+    #@staticmethod
+    #@jit
+    def convert_bout_to_heatmap(self,bout, W, H, xv, yv):
         C, T, V, M = np.shape(bout) #.shape
         stack = np.empty((V, int(T/2), W, H))
     
     
-        for t in np.arange(0, T, 2):
+        for t_idx, t in enumerate(np.arange(0, int(T/2) * 2, 2)):
             for k in np.arange(V):
 
                 xk = bout[0, t, k, 0] # N,C,T,V
@@ -382,7 +383,7 @@ class ZebData(torch.utils.data.Dataset):
             
                 zz = np.exp(-  (((xv- xk)**2) + ((yv- yk)**2)) / (2 * (0.1**2))) * ck
 
-                stack[k, t] = zz
+                stack[k, t_idx] = zz
             
         return stack
 
