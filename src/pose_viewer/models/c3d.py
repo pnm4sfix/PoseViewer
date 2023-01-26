@@ -76,7 +76,7 @@ class C3D(LightningModule):
 
         self.conv4a = self._conv_layer_set(256, 256, kernel_size, padding)#ConvModule(256, 512, **c3d_conv_param)
         #self.conv4b = self._conv_layer_set(512, 512, kernel_size, padding)#ConvModule(512, 512, **c3d_conv_param)
-        #self.pool4 = nn.MaxPool3d(kernel_size=(2, 2, 2), stride=(2, 2, 2))
+        self.pool4 = nn.MaxPool3d(kernel_size=(2, 2, 2), stride=(2, 2, 2), padding = (0, 1, 1))
 
         #self.conv5a = self._conv_layer_set(512, 512, kernel_size, padding)#ConvModule(512, 512, **c3d_conv_param)
         #self.conv5b = self._conv_layer_set(512, 512, kernel_size, padding)#ConvModule(512, 512, **c3d_conv_param)
@@ -89,7 +89,7 @@ class C3D(LightningModule):
 
         #self.conv_layer2 = self._conv_layer_set(32, 64)
 
-        self.fc1 = nn.Linear(4096, 2048)
+        self.fc1 = nn.Linear(739840, 2048)
         self.fc2 = nn.Linear(2048, self.num_classes)
         self.relu = nn.LeakyReLU()
         #self.batch=nn.BatchNorm1d(128)
@@ -239,19 +239,19 @@ class C3D(LightningModule):
         x = self.pool3(x)
 
         x = self.conv4a(x)
-        x = self.conv4b(x)
+        #x = self.conv4b(x)
         x = self.pool4(x)
 
-        x = self.conv5a(x)
-        x = self.conv5b(x)
-        x = self.pool5(x)
+        #x = self.conv5a(x)
+        #x = self.conv5b(x)
+        #x = self.pool5(x)
 
-        x = x.flatten(start_dim=1)
-        #x = x.view(x.size(0), -1)
+        #x = x.flatten(start_dim=1)
+        x = x.view(x.size(0), -1)
 
-        x = self.relu(self.fc6(x))
+        x = self.relu(self.fc1(x))
         x = self.dropout(x)
-        x = self.relu(self.fc7(x))
+        x = self.relu(self.fc2(x))
         x = self.softmax(x)
 
         return x

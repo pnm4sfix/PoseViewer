@@ -89,7 +89,7 @@ class ZebData(torch.utils.data.Dataset):
             y_min = self.data[:, 1].min()
             y_max = self.data[:, 1].max()
 
-            self.H = self.W = 256
+            self.H = self.W = 64
             x = np.linspace(x_min, x_max, num  =self.W)
             y = np.linspace(y_min, y_max, num  =self.H)
             self.xv, self.yv = np.meshgrid(x, y, indexing='xy')
@@ -370,10 +370,10 @@ class ZebData(torch.utils.data.Dataset):
     @jit
     def convert_bout_to_heatmap(bout, W, H, xv, yv):
         C, T, V, M = np.shape(bout) #.shape
-        stack = np.empty((V, T, W, H))
+        stack = np.empty((V, int(T/2), W, H))
     
     
-        for t in np.arange(T):
+        for t in np.arange(0, T, 2):
             for k in np.arange(V):
 
                 xk = bout[0, t, k, 0] # N,C,T,V
