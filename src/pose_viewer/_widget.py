@@ -32,7 +32,8 @@ import os
 from ._loader import ZebData, HyperParams
 from torch.utils.data import DataLoader, random_split, Subset
 import torch
-from .models import st_gcn_aaai18_pylightning_3block
+from .models import st_gcn_aaai18_pylightning_3block, c3d
+
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.callbacks.stochastic_weight_avg import StochasticWeightAveraging
@@ -1378,6 +1379,19 @@ class ExampleQWidget(Container):
         self.numChannels = self.config_data["train_cfg"]["num_channels"]
         self.num_workers = self.config_data["train_cfg"]["num_workers"]
 
+        try:
+            self.backbone = self.config_data["train_cfg"]["backbone"]
+
+        except:
+            "print no backbone- defaulting to STGCN"
+            self.backbone = "ST-GCN"
+
+        try:
+            self.transform = self.config_data["train_cfg"]["transform"]
+            print("transform is {}".format(self.transform))
+        except:
+            self.transform = None
+
         
         # create dataloader from preprocess swims
         self.batch_size = self.batch_size_spinbox.value # spinbox
@@ -1394,7 +1408,8 @@ class ExampleQWidget(Container):
         data_cfg = { 'data_dir': PATH_DATASETS,
                     'augment': False,
                     'ideal_sample_no' : None,
-                    'shift' : False}
+                    'shift' : False,
+                    'transform': self.transform}
 
         graph_cfg = {"layout":self.graph_layout}
 
@@ -1404,11 +1419,21 @@ class ExampleQWidget(Container):
         ## optimise trainer to just predict as currently its preparing data thinking its training
         # predict
         for n in range(4): # does ths reuse model in current state?
-            model = st_gcn_aaai18_pylightning_3block.ST_GCN_18(in_channels = self.numChannels, 
-                                                   num_class = self.numlabels, 
-                                                   graph_cfg = graph_cfg, 
-                                                   data_cfg = data_cfg, 
-                                                   hparams = hparams)
+            
+            if self.backbone == "ST-GCN":
+
+                model = st_gcn_aaai18_pylightning_3block.ST_GCN_18(in_channels = self.numChannels, 
+                                                       num_class = self.numlabels, 
+                                                       graph_cfg = graph_cfg, 
+                                                       data_cfg = data_cfg, 
+                                                       hparams = hparams)
+            elif self.backbone == "C3D":
+                model = c3d.C3D(num_class =self.numlabels,
+                                 num_channels = self.numChannels,
+                                 data_cfg = data_cfg,
+                                 hparams= hparams,
+                                 num_workers = self.num_workers
+                                 )
 
 
         

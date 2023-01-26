@@ -1,6 +1,7 @@
 import torch
 import numpy as np
 from torchvision.transforms import ToTensor, Lambda
+from numba import jit
 
 
 
@@ -81,6 +82,21 @@ class ZebData(torch.utils.data.Dataset):
         self.transform = transform
         self.target_transform = target_transform
 
+        if self.transform == "heatmap":
+            x_min = self.data[:,0].min()
+            x_max = self.data[:,0].max()
+
+            y_min = self.data[:, 1].min()
+            y_max = self.data[:, 1].max()
+
+            self.H = self.W = 256
+            x = np.linspace(x_min, x_max, num  =self.W)
+            y = np.linspace(y_min, y_max, num  =self.H)
+            self.xv, self.yv = np.meshgrid(x, y, indexing='xy')
+            print("x min is {}, x max is {}, y min is {} y max is {}".format(x_min, x_max, y_min, y_max))
+
+
+
     def __len__(self):
         return len(self.labels)
 
@@ -95,7 +111,10 @@ class ZebData(torch.utils.data.Dataset):
                 
                 behaviour = self.align(behaviour)
                 behaviour = torch.from_numpy(behaviour).to(torch.float32)
-            
+
+            if self.transform == "heatmap":
+                behaviour = self.convert_bout_to_heatmap(behaviour, self.W, self.H, self.xv, self.yv)
+                behaviour = torch.from_numpy(behaviour).to(torch.float32)
         
         if self.transform is None:
             behaviour = torch.from_numpy(behaviour).to(torch.float32)
@@ -346,6 +365,26 @@ class ZebData(torch.utils.data.Dataset):
 
 
         return sheared
+
+    @staticmethod
+    @jit
+    def convert_bout_to_heatmap(bout, W, H, xv, yv):
+        C, T, V, M = np.shape(bout) #.shape
+        stack = np.empty((V, T, W, H))
+    
+    
+        for t in np.arange(T):
+            for k in np.arange(V):
+
+                xk = bout[0, t, k, 0] # N,C,T,V
+                yk = bout[1, t, k, 0]
+                ck = bout[2, t, k, 0]
+            
+                zz = np.exp(-  (((xv- xk)**2) + ((yv- yk)**2)) / (2 * (0.1**2))) * ck
+
+                stack[k, t] = zz
+            
+        return stack
 
 class HyperParams(object):
     

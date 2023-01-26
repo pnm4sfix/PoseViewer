@@ -2,7 +2,8 @@
   "ExpandedNodes": [
     "",
     "\\src",
-    "\\src\\pose_viewer"
+    "\\src\\pose_viewer",
+    "\\src\\pose_viewer\\models"
   ],
   "SelectedNode": "\\src\\pose_viewer\\_widget.py",
   "PreviewInSolutionExplorer": false
