@@ -71,6 +71,11 @@ class ST_GCN_18(LightningModule):
             self.transform = data_cfg['transform']
         except:
             self.transform = None
+
+        try: 
+            self.labels_to_ignore = data_cfg["labels_to_ignore"]
+        except:
+            self.labels_to_ignore = []
         
         self.learning_rate = hparams.learning_rate
         self.batch_size = hparams.batch_size
@@ -172,10 +177,14 @@ class ST_GCN_18(LightningModule):
     def test_step(self, batch, batch_idx):
         x, y = batch
         output = self(x)
-        #loss = F.cross_entropy(output, y)
-        #preds = torch.argmax(output, dim=1)
-
-        return output
+        loss = F.cross_entropy(output, y)
+        preds = torch.argmax(output, dim=1)
+        acc = accuracy(preds, y, task="multiclass", num_classes=self.num_classes)
+        acc3 = accuracy(preds, y, task="multiclass", num_classes=self.num_classes, top_k = 3)
+        
+        self.log("val_loss", loss, prog_bar = True, sync_dist = True, logger = True, on_epoch = True)
+        self.log("val_acc", acc, prog_bar = True, logger = True, on_epoch = True)
+        self.log("val_acc_top3", acc3, prog_bar = True)
     
     def on_train_start(self):
         #self.hparams = {"lr": self.learning_rate,
@@ -214,12 +223,12 @@ class ST_GCN_18(LightningModule):
             self.train_data = ZebData(os.path.join(self.data_dir, "Zebtrain.npy"), 
                                       os.path.join(self.data_dir, "Zebtrain_labels.npy"),
                                       target_transform = target_transform, augment = self.augment, ideal_sample_no = self.ideal_sample_no, shift = self.shift, 
-                                      transform = self.transform)
+                                      transform = self.transform, labels_to_ignore =  self.labels_to_ignore)
                                   
             self.test_data = ZebData(os.path.join(self.data_dir, "Zebtest.npy"), 
                                      os.path.join(self.data_dir, "Zebtest_labels.npy"),
                                      target_transform = target_transform,
-                                     transform = self.transform)
+                                     transform = self.transform, labels_to_ignore = self.labels_to_ignore)
         
         
         

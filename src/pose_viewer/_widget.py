@@ -1459,6 +1459,11 @@ class ExampleQWidget(Container):
                 self.transform = None
         except:
             self.transform = None
+
+        try:
+            self.labels_to_ignore =  self.config_data["data_cfg"]["labels_to_ignore"]
+        except:
+            self.labels_to_ignore = []
         
         # assign model parameters
         PATH_DATASETS = self.decoder_data_dir
@@ -1470,7 +1475,8 @@ class ExampleQWidget(Container):
                     'augment': False,
                     'ideal_sample_no' : None,
                     'shift' : False,
-                     'transform':self.transform}
+                     'transform':self.transform,
+                     'labels_to_ignore': self.labels_to_ignore}
 
         graph_cfg = {"layout":self.graph_layout}
 
@@ -1598,8 +1604,7 @@ class ExampleQWidget(Container):
         
         model.freeze()
 
-
-        print("trial is {}".format(n))
+        
 
         TTLogger = TensorBoardLogger(save_dir = self.decoder_data_dir)
         early_stop = EarlyStopping(monitor="val_loss", mode="min", patience = 5)
@@ -1632,10 +1637,12 @@ class ExampleQWidget(Container):
             callbacks = [early_stop], auto_lr_find=True)#, stochastic_weight_avg=True) - this is a callback in latest lightning-, swa -swa messes up auto lr
 
             
+        trainer.test(model)
+        predictions = trainer.predict(model, model.test_dataloader())
+       
+        predictions = torch.concat(predictions, dim = 0)
 
-        predictions = trainer.test(model)
-
-        np.save(os.path.join(self.decoder_dir, "prediction_ckpt_{}.npy".format(self.chkpt_dropdown.value)), predictions.numpy())
+        np.save(os.path.join(os.path.dirname(self.chkpt), "predictions.npy"), predictions.numpy())
 
         print("Finished Testing")
 

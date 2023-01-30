@@ -44,7 +44,8 @@ class ZebData(torch.utils.data.Dataset):
     
     """Class for test data - because data isnt large just load data at init """
     def __init__(self, data_file =None, label_file= None, transform=None,
-                 target_transform = None, ideal_sample_no =None, augment = False, shift = False):
+                 target_transform = None, ideal_sample_no =None, augment = False, shift = False,
+                 labels_to_ignore = None):
         
         if data_file is not None:
             self.data = np.load(data_file)
@@ -61,6 +62,12 @@ class ZebData(torch.utils.data.Dataset):
             # drop junk 0 cluster
             #self.data = self.data[self.labels>0]
             #self.labels = self.labels[self.labels>0]
+
+            if labels_to_ignore is not None:
+                self.labels[~np.isin(self.labels, labels_to_ignore)]
+                self.data[~np.isin(self.labels, labels_to_ignore)]
+                print("Ignoring Labels {}".format(labels_to_ignore))
+                print("Data contains labels {}".format(np.unique(self.labels)))
             
             mapping = {k:v for v, k in enumerate(np.unique(self.labels))}
             for k, v in mapping.items():
