@@ -1485,7 +1485,8 @@ class ExampleQWidget(Container):
         return (data_cfg, graph_cfg, hparams)
 
     def finetune(self):
-        
+        ### Fine tune strategies - 1) Freeze and modify last layer, 2) Train on worse perfoming classes
+                                   
         # load best checkpoint
 
         # freeze model
@@ -1498,18 +1499,21 @@ class ExampleQWidget(Container):
         data_cfg, graph_cfg, hparams = self.initialise_params()
        
 
+
+        orig_num_labels = len(data_cfg["labels_to_ignore"]) + self.numlabels # this is for specific example
+
         
         log_folder = os.path.join(self.decoder_data_dir, "lightning_logs")
         self.chkpt =  os.path.join(log_folder, self.chkpt_dropdown.value)  # spinbox
 
         for n in range(4): # does ths reuse model in current state?
             model = st_gcn_aaai18_pylightning_3block.ST_GCN_18(in_channels = self.numChannels, 
-                                                   num_class = self.numlabels, 
+                                                   num_class = orig_num_labels, # self.numlabels, 
                                                    graph_cfg = graph_cfg, 
                                                    data_cfg = data_cfg, 
                                                    hparams = hparams).load_from_checkpoint(self.chkpt, 
                                                                                            in_channels = self.numChannels, 
-                                                                                           num_class = self.numlabels, 
+                                                                                           num_class = orig_num_labels, #self.numlabels, 
                                                                                            graph_cfg = graph_cfg, 
                                                                                            data_cfg = data_cfg,
                                                                                            hparams = hparams)
