@@ -2,7 +2,10 @@ import torch
 import numpy as np
 from torchvision.transforms import ToTensor, Lambda
 from numba import jit
-import cupy as cp
+try:
+    import cupy as cp
+except:
+    print("Couldnt import cupy")
 
 
 

@@ -5,6 +5,6 @@
     "\\src\\pose_viewer",
     "\\src\\pose_viewer\\models"
   ],
-  "SelectedNode": "\\src\\pose_viewer\\_widget.py",
+  "SelectedNode": "\\src\\pose_viewer\\_loader.py",
   "PreviewInSolutionExplorer": false
 }
