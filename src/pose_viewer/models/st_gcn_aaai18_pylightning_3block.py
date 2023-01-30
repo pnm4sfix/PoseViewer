@@ -75,7 +75,7 @@ class ST_GCN_18(LightningModule):
         try: 
             self.labels_to_ignore = data_cfg["labels_to_ignore"]
         except:
-            self.labels_to_ignore = []
+            self.labels_to_ignore = None
         
         self.learning_rate = hparams.learning_rate
         self.batch_size = hparams.batch_size

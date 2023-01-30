@@ -1463,7 +1463,7 @@ class ExampleQWidget(Container):
         try:
             self.labels_to_ignore =  self.config_data["data_cfg"]["labels_to_ignore"]
         except:
-            self.labels_to_ignore = []
+            self.labels_to_ignore = None
         
         # assign model parameters
         PATH_DATASETS = self.decoder_data_dir
