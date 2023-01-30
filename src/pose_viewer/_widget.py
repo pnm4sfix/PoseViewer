@@ -202,10 +202,13 @@ class ExampleQWidget(Container):
         self.finetune_button = PushButton(label = "Finetune")
         self.finetune_button.clicked.connect(self.finetune)
 
+        self.test_button = PushButton(label = "Test")
+        self.test_button.clicked.connect(self.test)
+
         
 
         self.extend([self.batch_size_spinbox,self.lr_spinbox,  self.chkpt_dropdown,
-                    self.train_button, self.analyse_button, self.finetune_button ])#self.num_workers_spinbox,  self.dropout_spinbox,
+                    self.train_button, self.analyse_button, self.finetune_button, self.test_button ])#self.num_workers_spinbox,  self.dropout_spinbox,
                      #self.num_labels_spinbox, self.num_channels_spinbox, self.model_dropdown,, 
                      #])
 
@@ -235,6 +238,7 @@ class ExampleQWidget(Container):
         self.populate_chkpt_dropdown() # load ckpt files if any
 
         print("decoder config is {}".format(self.config_data))
+        self.view_data()
 
 
     
@@ -854,120 +858,127 @@ class ExampleQWidget(Container):
 
         print("New behaviour is {}".format(self.behaviour_no))
 
-        if (self.last_behaviour != 0) &(self.behaviour_no != 0): #event.value > 1:
-            self.save_current_data()
+        
             
-        if (self.labeled != True):
+        #if (self.labeled != True):
             
-            self.spinbox.max = len(self.behaviours)
+        #    self.spinbox.max = len(self.behaviours)
             
         if self.behaviour_no >0:
-            
-            
-            #exists = len([k for k in self.classification_data[self.ind].keys() if k == self.behaviour_no])
-            if self.behaviour_no in self.classification_data[self.ind]: #exists > 0:
-                print("exists")
-                # use self.classification_data
-                
-                #self.reset_layers()
-                
-                # get points from here, too complicated to create tracks here i think
-                #print(self.label_menu.choices)
-                self.point_subset = self.classification_data[self.ind][self.behaviour_no]["coords"]
-                self.start = self.classification_data[self.ind][self.behaviour_no]["start"]
-                self.stop = self.classification_data[self.ind][self.behaviour_no]["stop"]
-                self.ci_subset = self.classification_data[self.ind][self.behaviour_no]["ci"]
-                #self.im_subset = self.viewer.add_image(self.im[self.start:self.stop])
-                #self.points_layer = self.viewer.add_points(self.point_subset, size=5)
-                
-                
-                self.im_subset.data = self.im[self.start:self.stop]
-                
-                #self.im_subset = self.viewer.layers[0]
-                try:
-                    self.points_layer.data = self.point_subset
-                except:
-                    self.points_layer = self.viewer.add_points(self.point_subset, size=5)
-                    self.label_menu.choices = self.choices
 
-                if self.tracks is not None:
+            if self.ind in self.classification_data.keys():
+
+                if (self.last_behaviour != 0) &(self.behaviour_no != 0): #event.value > 1:
+                    self.save_current_data()
+            
+            
+                #exists = len([k for k in self.classification_data[self.ind].keys() if k == self.behaviour_no])
+                if self.behaviour_no in self.classification_data[self.ind]: #exists > 0:
+                    print("exists")
+                    # use self.classification_data
+                
+                    #self.reset_layers()
+                
+                    # get points from here, too complicated to create tracks here i think
+                    #print(self.label_menu.choices)
+                    self.point_subset = self.classification_data[self.ind][self.behaviour_no]["coords"]
+                    self.start = self.classification_data[self.ind][self.behaviour_no]["start"]
+                    self.stop = self.classification_data[self.ind][self.behaviour_no]["stop"]
+                    self.ci_subset = self.classification_data[self.ind][self.behaviour_no]["ci"]
+                    #self.im_subset = self.viewer.add_image(self.im[self.start:self.stop])
+                    #self.points_layer = self.viewer.add_points(self.point_subset, size=5)
+                
+                
+                    self.im_subset.data = self.im[self.start:self.stop]
+                
+                    #self.im_subset = self.viewer.layers[0]
+                    try:
+                        self.points_layer.data = self.point_subset
+                    except:
+                        self.points_layer = self.viewer.add_points(self.point_subset, size=5)
+                        self.label_menu.choices = self.choices
+
+                    if self.tracks is not None:
+                        self.track_subset = self.tracks[self.start:self.stop]
+                        self.track_subset = self.track_subset - np.array([0, self.start, 0, 0]) # zero z because add_image has zeroed
+                
+                        try:
+                            self.track_layer.data = self.track_subset
+                        except:
+                    
+                            self.track_layer = self.viewer.add_tracks(self.track_subset, tail_length = 500, tail_width = 3)
+                            self.label_menu.choices = self.choices
+                    #self.points_layer.data = self.point_subset
+                
+                    if self.label_menu.choices == ():
+                        try:
+                            self.label_menu.choices = self.txt_behaviours
+                        except:
+                            pass
+                    self.update_classification()
+                    #print(self.label_menu.choices)
+                
+                
+                
+                
+                elif (self.behaviour_no not in self.classification_data[self.ind]) & (len(self.behaviours)>0):
+                    print("extracting behaviour")
+                    self.start, self.stop = self.behaviours[self.behaviour_no-1] # -1 because behaviours is array indexed
+                    #self.reset_layers()
+
+                    #self.im_subset = self.viewer.add_image(self.im[self.start:self.stop])
+                    self.im_subset.data = self.im[self.start:self.stop]
+                
+                    dur = self.stop-self.start
+                    self.point_subset = self.points.reshape((self.n_nodes, -1, 3))[:, self.start:self.stop].reshape((int(self.n_nodes*dur), 3))
+                    self.point_subset = self.point_subset - np.array([self.start, 0, 0]) # zero z because add_image has zeroed
+
                     self.track_subset = self.tracks[self.start:self.stop]
                     self.track_subset = self.track_subset - np.array([0, self.start, 0, 0]) # zero z because add_image has zeroed
                 
+                    self.ci_subset = self.ci.iloc[:, self.start:self.stop].to_numpy().flatten()
+
+                
+                    #self.im_subset = self.viewer.layers[0]
+                    #self.im_subset.data = self.im[self.start:self.stop]
+                
+                    #self.im_subset = self.viewer.layers[0]
+                    try:
+                        self.points_layer.data = self.point_subset
+                    except:
+                        self.points_layer = self.viewer.add_points(self.point_subset, size=5)
+                        self.label_menu.choices = self.choices
+                
+                    #self.points_layer.data = self.point_subset
+                    #self.points_layer = self.viewer.add_points(self.point_subset, size=5)
                     try:
                         self.track_layer.data = self.track_subset
                     except:
                     
                         self.track_layer = self.viewer.add_tracks(self.track_subset, tail_length = 500, tail_width = 3)
                         self.label_menu.choices = self.choices
-                #self.points_layer.data = self.point_subset
-                
-                if self.label_menu.choices == ():
-                    try:
-                        self.label_menu.choices = self.txt_behaviours
-                    except:
-                        pass
-                self.update_classification()
-                #print(self.label_menu.choices)
-                
-                
-                
-                
-            elif (self.behaviour_no not in self.classification_data[self.ind]) & (len(self.behaviours)>0):
-                print("extracting behaviour")
-                self.start, self.stop = self.behaviours[self.behaviour_no-1] # -1 because behaviours is array indexed
-                #self.reset_layers()
-
-                #self.im_subset = self.viewer.add_image(self.im[self.start:self.stop])
-                self.im_subset.data = self.im[self.start:self.stop]
-                
-                dur = self.stop-self.start
-                self.point_subset = self.points.reshape((self.n_nodes, -1, 3))[:, self.start:self.stop].reshape((int(self.n_nodes*dur), 3))
-                self.point_subset = self.point_subset - np.array([self.start, 0, 0]) # zero z because add_image has zeroed
-
-                self.track_subset = self.tracks[self.start:self.stop]
-                self.track_subset = self.track_subset - np.array([0, self.start, 0, 0]) # zero z because add_image has zeroed
-                
-                self.ci_subset = self.ci.iloc[:, self.start:self.stop].to_numpy().flatten()
-
-                
-                #self.im_subset = self.viewer.layers[0]
-                #self.im_subset.data = self.im[self.start:self.stop]
-                
-                #self.im_subset = self.viewer.layers[0]
-                try:
-                    self.points_layer.data = self.point_subset
-                except:
-                    self.points_layer = self.viewer.add_points(self.point_subset, size=5)
-                    self.label_menu.choices = self.choices
-                
-                #self.points_layer.data = self.point_subset
-                #self.points_layer = self.viewer.add_points(self.point_subset, size=5)
-                try:
-                    self.track_layer.data = self.track_subset
-                except:
-                    
-                    self.track_layer = self.viewer.add_tracks(self.track_subset, tail_length = 500, tail_width = 3)
-                    self.label_menu.choices = self.choices
                 
            
-                if self.label_menu.choices == ():
-                    print(self.label_menu.choices)
-                    try:
-                        self.label_menu.choices = self.txt_behaviours
-                    except:
-                        pass
-                    print(self.label_menu.choices)
+                    if self.label_menu.choices == ():
+                        print(self.label_menu.choices)
+                        try:
+                            self.label_menu.choices = self.txt_behaviours
+                        except:
+                            pass
+                        print(self.label_menu.choices)
 
-                if self.b_labels is not None:
-                    self.label_menu.value = self.b_labels[self.behaviour_no-1]
-                    print("Label score is {}".format(self.predictions.numpy()[self.behaviour_no-1]))
+                    if self.b_labels is not None:
+                        self.label_menu.value = self.b_labels[self.behaviour_no-1]
+                        print("Label score is {}".format(self.predictions.numpy()[self.behaviour_no-1]))
 
-                self.plot_behaving_region()
-                #self.update_classification()
+                    self.plot_behaving_region()
+                    #self.update_classification()
+            elif (len(self.behaviours) == 0):
+                self.show_data(self.behaviour_no -1)
+
             
             
-            # save value classification value to something
+                # save value classification value to something
 
     def save_to_h5(self, event):
         """converts classification data to pytables format for efficient storage.
@@ -1162,44 +1173,7 @@ class ExampleQWidget(Container):
         self.zebdata.labels = np.zeros(padded_bouts.shape[0])
 
     def predict_behaviours(self):
-
-        # create dataloader from preprocess swims
-
-        self.numlabels = self.config_data["data_cfg"]["numLabels"]
-        self.devices = self.config_data["train_cfg"]["devices"]
-        self.auto_lr = self.config_data["train_cfg"]["auto_lr"]
-        self.accelerator = self.config_data["train_cfg"]["accelerator"]
-        self.graph_layout = self.config_data["train_cfg"]["graph_layout"]
-        self.dropout = self.config_data["train_cfg"]["dropout"]
-        self.numChannels = self.config_data["train_cfg"]["num_channels"]
-        self.num_workers = self.config_data["train_cfg"]["num_workers"]
-
-        
-        # create dataloader from preprocess swims
-        self.batch_size = self.batch_size_spinbox.value # spinbox
-        #self.num_workers = self.num_workers_spinbox.value # spinbox
-        self.lr = self.lr_spinbox.value # spinbox
-        #self.dropout = self.dropout_spinbox.value # spinbox
-        
-        # assign model parameters
-        PATH_DATASETS = self.decoder_data_dir
-        #self.numlabels = self.num_labels_spinbox.value # spinbox
-        #self.numChannels = self.num_channels_spinbox.value # X, Y and CI - spinbox
-       
-        
-        # assign model parameters
-        PATH_DATASETS = self.decoder_data_dir
-        
-        
-
-        data_cfg = { 'data_dir': PATH_DATASETS,
-                    'augment': False,
-                    'ideal_sample_no' : None,
-                    'shift' : False}
-
-        graph_cfg = {"layout":self.graph_layout}
-
-        hparams = HyperParams(self.batch_size, self.lr, self.dropout)
+        data_cfg, graph_cfg, hparams = self.initialise_params()
 
         data_loader = DataLoader(self.zebdata, batch_size = self.batch_size, num_workers = self.num_workers, pin_memory = False)
         
@@ -1226,6 +1200,7 @@ class ExampleQWidget(Container):
         predictions = trainer.predict(model, data_loader) # returns a list of the processed batches
         self.predictions = torch.concat(predictions, dim = 0)
         print(self.predictions)
+
 
     def update_classification_data_with_predictions(self):
 
@@ -1292,15 +1267,8 @@ class ExampleQWidget(Container):
 
         return train_bouts, train_labels
 
-    def train(self):
-        #self.decoder_data_dir = self.decoder_dir_picker.value
-        # Load prepare data
-        if os.path.exists(os.path.join(self.decoder_data_dir, "Zebtrain.npy")):
-            print("Data Prepared")
-           
-
-        else:
-            print("Preparing Data")
+    def prepare_data(self):
+        
             # Prepare and save data
             # take one datafolder and 
             all_files = [os.path.join(self.decoder_data_dir, file) for file in os.listdir(self.decoder_data_dir) if "classification.h5" in file]
@@ -1366,54 +1334,20 @@ class ExampleQWidget(Container):
 
             print("Data Prepared and Save at {}".format(self.decoder_data_dir))
 
+    def train(self):
+        #self.decoder_data_dir = self.decoder_dir_picker.value
+        # Load prepare data
+        if os.path.exists(os.path.join(self.decoder_data_dir, "Zebtrain.npy")):
+            print("Data Prepared")
+           
+
+        else:
+            print("Preparing Data")
+            self.prepare_data()
+
         # train 
 
-        
-
-        self.numlabels = self.config_data["data_cfg"]["numLabels"]
-        self.devices = self.config_data["train_cfg"]["devices"]
-        self.auto_lr = self.config_data["train_cfg"]["auto_lr"]
-        self.accelerator = self.config_data["train_cfg"]["accelerator"]
-        self.graph_layout = self.config_data["train_cfg"]["graph_layout"]
-        self.dropout = self.config_data["train_cfg"]["dropout"]
-        self.numChannels = self.config_data["train_cfg"]["num_channels"]
-        self.num_workers = self.config_data["train_cfg"]["num_workers"]
-
-        try:
-            self.backbone = self.config_data["train_cfg"]["backbone"]
-
-        except:
-            "print no backbone- defaulting to STGCN"
-            self.backbone = "ST-GCN"
-
-        try:
-            self.transform = self.config_data["train_cfg"]["transform"]
-            print("transform is {}".format(self.transform))
-        except:
-            self.transform = None
-
-        
-        # create dataloader from preprocess swims
-        self.batch_size = self.batch_size_spinbox.value # spinbox
-        #self.num_workers = self.num_workers_spinbox.value # spinbox
-        self.lr = self.lr_spinbox.value # spinbox
-        #self.dropout = self.dropout_spinbox.value # spinbox
-        
-        # assign model parameters
-        PATH_DATASETS = self.decoder_data_dir
-        #self.numlabels = self.num_labels_spinbox.value # spinbox
-        #self.numChannels = self.num_channels_spinbox.value # X, Y and CI - spinbox
-        
-
-        data_cfg = { 'data_dir': PATH_DATASETS,
-                    'augment': False,
-                    'ideal_sample_no' : None,
-                    'shift' : False,
-                    'transform': self.transform}
-
-        graph_cfg = {"layout":self.graph_layout}
-
-        hparams = HyperParams(self.batch_size, self.lr, self.dropout)
+        data_cfg, graph_cfg, hparams = self.initialise_params()
 
         # create trainer object, 
         ## optimise trainer to just predict as currently its preparing data thinking its training
@@ -1435,7 +1369,9 @@ class ExampleQWidget(Container):
                                  num_workers = self.num_workers
                                  )
 
-
+            for param in model.parameters():
+                if param.requires_grad:
+                    print("param {} requires grad".format(param))
         
 
             print("trial is {}".format(n))
@@ -1483,24 +1419,16 @@ class ExampleQWidget(Container):
 
             trainer.tune(model)
 
+            ### DEBUG - overfit
+            #trainer = Trainer(devices =1, accelerator = "gpu", overfit_batches=0.01)
+
+
             trainer.fit(model)
 
             print("Finished Training - best model is {}".format(checkpoint_callback.best_model_path)) 
         # Add finetune - freeze model-replace last layer and train
 
-
-    def finetune(self):
-
-        # load best checkpoint
-
-        # freeze model
-        #model.fcn = nn.Conv2d(256, num_class, kernel_size=1)
-        # create model
-        # load checkpoint
-        # set all layers to grad = False
-        # change configure optimised in st -gcn backbone
-        # train
-
+    def initialise_params(self):
         self.numlabels = self.config_data["data_cfg"]["numLabels"]
         self.devices = self.config_data["train_cfg"]["devices"]
         self.auto_lr = self.config_data["train_cfg"]["auto_lr"]
@@ -1516,6 +1444,21 @@ class ExampleQWidget(Container):
         #self.num_workers = self.num_workers_spinbox.value # spinbox
         self.lr = self.lr_spinbox.value # spinbox
         #self.dropout = self.dropout_spinbox.value # spinbox
+
+        try:
+            self.backbone = self.config_data["train_cfg"]["backbone"]
+
+        except:
+            "print no backbone- defaulting to STGCN"
+            self.backbone = "ST-GCN"
+
+        try:
+            self.transform = self.config_data["train_cfg"]["transform"]
+            print("transform is {}".format(self.transform))
+            if self.transfrom == "None":
+                self.transform = None
+        except:
+            self.transform = None
         
         # assign model parameters
         PATH_DATASETS = self.decoder_data_dir
@@ -1526,11 +1469,28 @@ class ExampleQWidget(Container):
         data_cfg = { 'data_dir': PATH_DATASETS,
                     'augment': False,
                     'ideal_sample_no' : None,
-                    'shift' : False}
+                    'shift' : False,
+                     'transform':self.transform}
 
         graph_cfg = {"layout":self.graph_layout}
 
         hparams = HyperParams(self.batch_size, self.lr, self.dropout)
+
+        return (data_cfg, graph_cfg, hparams)
+
+    def finetune(self):
+        
+        # load best checkpoint
+
+        # freeze model
+        #model.fcn = nn.Conv2d(256, num_class, kernel_size=1)
+        # create model
+        # load checkpoint
+        # set all layers to grad = False
+        # change configure optimised in st -gcn backbone
+        # train
+        data_cfg, graph_cfg, hparams = self.initialise_params()
+       
 
         
         log_folder = os.path.join(self.decoder_data_dir, "lightning_logs")
@@ -1612,17 +1572,72 @@ class ExampleQWidget(Container):
 
             print("Finished Finetuning - best model is {}".format(checkpoint_callback.best_model_path)) 
         
-        pass
-
-    def find_best_models(self):
-        # loop through version folders in log folder
-        log_folder = os.path.join(self.decoder_data_dir, "lightning_logs")
-        version_folders = [version_folder for version_folder in os.listdir(log_folder) if "version" in version_folder]
         
-        ckpt_files = []
-        for version_folder in version_folders:
-            version_folder_files = os.listdir(os.path.join(log_folder, version_folder))
-            ckpt_file = []
+
+    def test(self):
+        data_cfg, graph_cfg, hparams = self.initialise_params()
+       
+
+        
+        log_folder = os.path.join(self.decoder_data_dir, "lightning_logs")
+        self.chkpt =  os.path.join(log_folder, self.chkpt_dropdown.value)  # spinbox
+
+        
+        model = st_gcn_aaai18_pylightning_3block.ST_GCN_18(in_channels = self.numChannels, 
+                                                num_class = self.numlabels, 
+                                                graph_cfg = graph_cfg, 
+                                                data_cfg = data_cfg, 
+                                                hparams = hparams).load_from_checkpoint(self.chkpt, 
+                                                                                        in_channels = self.numChannels, 
+                                                                                        num_class = self.numlabels, 
+                                                                                        graph_cfg = graph_cfg, 
+                                                                                        data_cfg = data_cfg,
+                                                                                        hparams = hparams)
+
+
+        
+        model.freeze()
+
+
+        print("trial is {}".format(n))
+
+        TTLogger = TensorBoardLogger(save_dir = self.decoder_data_dir)
+        early_stop = EarlyStopping(monitor="val_loss", mode="min", patience = 5)
+        swa = StochasticWeightAveraging(swa_lrs=1e-2)
+
+        if os.path.exists(log_folder):
+            if len(os.listdir(log_folder)) > 0:
+                version_folders = [version_folder for version_folder in os.listdir(log_folder) if "version" in version_folder]
+                latest_version_number = max([int(version_folder.split("_")[-1]) for version_folder in version_folders]) # this is not working quite right not selectin latest folder
+                print("latest version folder is {}".format(latest_version_number))
+                new_version_number = latest_version_number + 1
+                new_version_folder = os.path.join(log_folder, "version_{}".format(new_version_number))
+                print(new_version_folder)
+
+            else:
+                new_version_folder = os.path.join(log_folder, "version_0")
+
+        else:
+            new_version_folder = os.path.join(log_folder, "version_0")
+
+        print("new version folder is {}".format(new_version_folder))
+
+        
+
+        
+
+        trainer = Trainer(logger = TTLogger,
+            devices = self.devices, accelerator = self.accelerator,
+            max_epochs=100,
+            callbacks = [early_stop], auto_lr_find=True)#, stochastic_weight_avg=True) - this is a callback in latest lightning-, swa -swa messes up auto lr
+
+            
+
+        predictions = trainer.test(model)
+
+        np.save(os.path.join(self.decoder_dir, "prediction_ckpt_{}.npy".format(self.chkpt_dropdown.value)), predictions.numpy())
+
+        print("Finished Testing")
 
 
     
@@ -1770,7 +1785,28 @@ class ExampleQWidget(Container):
     
         return all_ind_bouts, all_labels
 
+    def view_data(self):
+        train_data = np.load(os.path.join(self.decoder_data_dir, "Zebtrain.npy"))
+        train_labels = np.load(os.path.join(self.decoder_data_dir, "Zebtrain_labels.npy"))
+        self.transform = self.config_data["train_cfg"]["transform"]
+        self.batch_size = self.batch_size_spinbox.value
+        self.zebdata = ZebData(transform = self.transform)
+        self.zebdata.data = train_data
+        self.zebdata.labels = train_labels
 
+        self.spinbox.max = self.zebdata.labels.shape[0]
+
+    def show_data(self, idx):
+        print(self.zebdata[idx][0].shape)
+        if self.transform == "heatmap":
+
+            if self.im_subset != None:
+            
+                self.im_subset.data = np.max(self.zebdata[idx][0].numpy(), axis=0)
+            else:
+                self.im_subset = self.viewer.add_image(np.max(self.zebdata[idx][0].numpy(), axis=0), name = "Video Recording")
+        
+        
 
 
 

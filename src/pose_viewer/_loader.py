@@ -2,6 +2,7 @@ import torch
 import numpy as np
 from torchvision.transforms import ToTensor, Lambda
 from numba import jit
+import cupy as cp
 
 
 
@@ -83,16 +84,18 @@ class ZebData(torch.utils.data.Dataset):
         self.target_transform = target_transform
 
         if self.transform == "heatmap":
-            x_min = self.data[:,0].min()
-            x_max = self.data[:,0].max()
+            x_min = -3#self.data[:,0].min()
+            x_max = 3 #self.data[:,0].max()
 
-            y_min = self.data[:, 1].min()
-            y_max = self.data[:, 1].max()
+            y_min = -3 #self.data[:, 1].min()
+            y_max = 3 #self.data[:, 1].max()
 
             self.H = self.W = 64
-            x = np.linspace(x_min, x_max, num  =self.W)
-            y = np.linspace(y_min, y_max, num  =self.H)
-            self.xv, self.yv = np.meshgrid(x, y, indexing='xy')
+            x = cp.linspace(x_min, x_max, num  =self.W, dtype = "float32")
+            y = cp.linspace(y_min, y_max, num  =self.H, dtype = "float32")
+            self.xv, self.yv = cp.meshgrid(x, y, indexing='xy')
+            self.xv_rs = self.xv.reshape((*self.xv.shape, 1))
+            self.yv_rs = self.yv.reshape((*self.yv.shape, 1))
             print("x min is {}, x max is {}, y min is {} y max is {}".format(x_min, x_max, y_min, y_max))
 
 
@@ -114,8 +117,11 @@ class ZebData(torch.utils.data.Dataset):
 
             if self.transform == "heatmap":
                 #print("transforming")
-                behaviour = self.convert_bout_to_heatmap(behaviour, self.W, self.H, self.xv, self.yv)
-                behaviour = torch.from_numpy(behaviour).to(torch.float32)
+                #behaviour = self.convert_bout_to_heatmap(behaviour, self.W, self.H, self.xv, self.yv)
+                #behaviour = torch.from_numpy(behaviour).to(torch.float32)
+                behaviour = torch.as_tensor(self.cp_bout_to_heatmap(cp.asarray(behaviour[:, ::4]), self.W, self.H, # get every 3rd timepoint to reduce size
+                                                                    self.xv_rs, self.yv_rs), device = "cpu", dtype= torch.float32)
+                
         
         if self.transform is None:
             behaviour = torch.from_numpy(behaviour).to(torch.float32)
@@ -386,6 +392,15 @@ class ZebData(torch.utils.data.Dataset):
                 stack[k, t_idx] = zz
             
         return stack
+
+    def cp_bout_to_heatmap(self, bout, W, H, xv_rs, yv_rs):
+        C, T, V, M = bout.shape
+        zx = ((xv_rs) - bout[0, :, :, 0].ravel())**2
+        zy = ((yv_rs) - bout[1, :, :, 0].ravel())**2
+        zz = np.exp(-(zx + zy) / (2 * (0.1**2))) * bout[2, :, :, 0].ravel()
+        zz = cp.swapaxes(cp.swapaxes(zz.reshape((W, H, T, V)), 0, -1), 1, 2)
+
+        return zz
 
 class HyperParams(object):
     

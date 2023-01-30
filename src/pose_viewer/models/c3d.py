@@ -89,25 +89,27 @@ class C3D(LightningModule):
 
         #self.conv_layer2 = self._conv_layer_set(32, 64)
 
-        self.fc1 = nn.Linear(32000, 2048)
-        self.fc2 = nn.Linear(2048, self.num_classes)
-        self.relu = nn.LeakyReLU()
+        self.fc1 = nn.Linear(12800, 2048)
+        self.fc2 = nn.Linear(2048, 2048)
+        self.fc3 = nn.Linear(2048, self.num_classes)
+        self.relu = nn.ReLU()
         #self.batch=nn.BatchNorm1d(128)
         self.dropout=nn.Dropout(p=dropout)        
         self.softmax = nn.Softmax(dim=1)
         
     def _conv_layer_set(self, in_c, out_c, kernel_size, padding):
-        conv_layer = nn.Sequential(
-        nn.Conv3d(in_c, out_c, kernel_size=kernel_size, padding=padding),
-        nn.LeakyReLU(),
+        #conv_layer = nn.Sequential(
+        conv_layer = nn.Conv3d(in_c, out_c, kernel_size=kernel_size, padding=padding)
+        #nn.LeakyReLU(),
         #nn.MaxPool3d((2, 2, 2)),
-        )
+        #)
         return conv_layer
 
     def configure_optimizers(self):
         # Make sure to filter the parameters based on `requires_grad`
         
-        return torch.optim.Adam(filter(lambda p: p.requires_grad, self.parameters()), lr = self.learning_rate)
+        #return torch.optim.Adam(filter(lambda p: p.requires_grad, self.parameters()), lr = self.learning_rate)
+        return torch.optim.SGD(filter(lambda p: p.requires_grad, self.parameters()), lr = self.learning_rate, momentum=0.9)
         #optimizer = torch.optim.Adam(self.parameters(), lr = self.learning_rate)
         #return optimizer
 
@@ -115,6 +117,7 @@ class C3D(LightningModule):
         #Make sure dataloaders are on cuda
         x, y = batch
         output = self(x)
+        print(output)
         loss = F.cross_entropy(output, y)
         preds = torch.argmax(output, dim=1)
         acc = accuracy(preds, y, task="multiclass", num_classes=self.num_classes)
@@ -228,17 +231,17 @@ class C3D(LightningModule):
             torch.Tensor: The feature of the input
             samples extracted by the backbone.
         """
-        x = self.conv1a(x)
+        x = self.relu(self.conv1a(x))
         x = self.pool1(x)
 
-        x = self.conv2a(x)
+        x = self.relu(self.conv2a(x))
         x = self.pool2(x)
 
-        x = self.conv3a(x)
-        x = self.conv3b(x)
+        x = self.relu(self.conv3a(x))
+        x = self.relu(self.conv3b(x))
         x = self.pool3(x)
 
-        x = self.conv4a(x)
+        x = self.relu(self.conv4a(x))
         #x = self.conv4b(x)
         x = self.pool4(x)
 
@@ -246,15 +249,20 @@ class C3D(LightningModule):
         #x = self.conv5b(x)
         #x = self.pool5(x)
 
-        #x = x.flatten(start_dim=1)
-        x = x.view(x.size(0), -1)
+        x = x.flatten(start_dim=1)
+        #x = x.view(x.size(0) , -1)
+        #x = x.view(-1, 12800)
 
         x = self.relu(self.fc1(x))
         x = self.dropout(x)
         x = self.relu(self.fc2(x))
-        x = self.softmax(x)
+        x = self.dropout(x)
 
-        return x
+        logits = self.fc3(x)
+        
+        probs = logits #self.softmax(logits)
+
+        return probs
 
 
         # Set 1

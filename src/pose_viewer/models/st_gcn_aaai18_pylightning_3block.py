@@ -170,7 +170,12 @@ class ST_GCN_18(LightningModule):
         self.log("val_acc", acc, prog_bar = True, logger = True, on_epoch = True)
         
     def test_step(self, batch, batch_idx):
-        return self.validation_step(batch, batch_idx)
+        x, y = batch
+        output = self(x)
+        #loss = F.cross_entropy(output, y)
+        #preds = torch.argmax(output, dim=1)
+
+        return output
     
     def on_train_start(self):
         #self.hparams = {"lr": self.learning_rate,
