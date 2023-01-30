@@ -64,10 +64,11 @@ class ZebData(torch.utils.data.Dataset):
             #self.labels = self.labels[self.labels>0]
 
             if labels_to_ignore is not None:
-                self.labels[~np.isin(self.labels, labels_to_ignore)]
-                self.data[~np.isin(self.labels, labels_to_ignore)]
+                label_filter = np.isin(self.labels, labels_to_ignore)
+                self.labels = self.labels[~label_filter]
+                self.data = self.data[~label_filter]
                 print("Ignoring Labels {}".format(labels_to_ignore))
-                print("Data contains labels {}".format(np.unique(self.labels)))
+                print("Filtered data contains labels {}".format(np.unique(self.labels)))
             
             mapping = {k:v for v, k in enumerate(np.unique(self.labels))}
             for k, v in mapping.items():
