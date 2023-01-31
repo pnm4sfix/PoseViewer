@@ -1650,6 +1650,9 @@ class ExampleQWidget(Container):
 
         print("Finished Testing")
 
+        print("Benchmarking model performance")
+        self.benchmark_model_performance(model)
+
 
     
     def read_classification_h5(self, file):
@@ -1816,11 +1819,95 @@ class ExampleQWidget(Container):
                 self.im_subset.data = np.max(self.zebdata[idx][0].numpy(), axis=0)
             else:
                 self.im_subset = self.viewer.add_image(np.max(self.zebdata[idx][0].numpy(), axis=0), name = "Video Recording")
+
+
+    
         
-        
+     
+    def benchmark_model_performance(self, model):
+            # get inference speed of one sample
+            # get time taken to process 1, 10, 100, 1000 behaviours
+
+            model.batch_size = 1
+            dataloader = model.test_dataloader()
+            
+
+            if self.accelerator == "gpu":
+                device = torch.device("cuda")
+            elif self.accelerator == "cpu":
+                device = torch.device("cpu")
+
+            model.to(device)
+
+
+            #### Single sample
+
+            
+            dummy_data = next(iter(dataloader))[0].to(device) 
+            #print(dummy_data)
+            
+            starter, ender = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+            repetitions = 300
+            timings=np.zeros((repetitions,1))
+            #GPU-WARM-UP
+            for _ in range(10):
+               _ = model(dummy_data)
+            # MEASURE PERFORMANCE
+            with torch.no_grad():
+                for rep in range(repetitions):
+                    starter.record()
+                    _ = model(dummy_data)
+                    ender.record()
+                    # WAIT FOR GPU SYNC
+                    torch.cuda.synchronize()
+                    curr_time = starter.elapsed_time(ender)
+                    timings[rep] = curr_time
+            mean_syn = np.sum(timings) / repetitions
+            std_syn = np.std(timings)
+            print("Mean inference latency on one sample is {} ms".format(mean_syn))
+            
+
+            ### A series of behaviours
+            model.batch_size = 10
+
+
+            durations = {}
+            
+            for n, nsamples in enumerate([1, 10, 100, 1000]):
+
+                for trial in range(4):
+                    #starter, ender = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+                    repetitions = int(np.ceil(nsamples / model.batch_size)) 
+                    print(repetitions)
+                    dataloader = model.test_dataloader()
+                    with torch.no_grad():
+                        #starter.record()
+                        start = time.time()
+                        for rep in range(repetitions):
+
+                            dummy_data = next(iter(dataloader))[0].to(device) 
+                            _ = model(dummy_data)
+                        # WAIT FOR GPU SYNC
+                        #torch.cuda.synchronize()
+                        #ender.record()
+                        #curr_time = starter.elapsed_time(ender)
+                        end = time.time()
+                        curr_time = end-start
+                        durations[str(nsamples), trial] = curr_time
+
+            print("Durations are {}".format(durations))
+
+            np.save(os.path.join(self.decoder_data_dir, "inference_latencies.npy"), timings)
+            np.save(os.path.join(self.decoder_data_dir, "inference_durations_vs_datasetsize.npy"), durations)
 
 
 
 
 
 
+
+
+
+
+
+            

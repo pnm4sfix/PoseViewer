@@ -180,11 +180,11 @@ class ST_GCN_18(LightningModule):
         loss = F.cross_entropy(output, y)
         preds = torch.argmax(output, dim=1)
         acc = accuracy(preds, y, task="multiclass", num_classes=self.num_classes)
-        acc3 = accuracy(preds, y, task="multiclass", num_classes=self.num_classes, top_k = 3)
+        #acc3 = accuracy(preds, y, task="multiclass", num_classes=self.num_classes, top_k = 3)
         
         self.log("val_loss", loss, prog_bar = True, sync_dist = True, logger = True, on_epoch = True)
         self.log("val_acc", acc, prog_bar = True, logger = True, on_epoch = True)
-        self.log("val_acc_top3", acc3, prog_bar = True)
+        #self.log("val_acc_top3", acc3, prog_bar = True)
     
     def on_train_start(self):
         #self.hparams = {"lr": self.learning_rate,
@@ -310,8 +310,8 @@ class ST_GCN_18(LightningModule):
         return output, feature
 
     def predict_step(self, batch, batch_idx, dataloader_idx=0):
-        print(len(batch))
-        print(batch[0].shape)
+        #print(len(batch))
+        #print(batch[0].shape)
         return self(batch[0])
     
     
