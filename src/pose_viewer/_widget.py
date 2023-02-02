@@ -1182,11 +1182,13 @@ class ExampleQWidget(Container):
         self.chkpt =  os.path.join(log_folder, self.chkpt_dropdown.value)  # spinbox
 
         model = st_gcn_aaai18_pylightning_3block.ST_GCN_18(in_channels = self.numChannels, 
+                                                           num_workers=self.num_workers,
                                                    num_class = self.numlabels, 
                                                    graph_cfg = graph_cfg, 
                                                    data_cfg = data_cfg, 
                                                    hparams = hparams).load_from_checkpoint(self.chkpt, 
                                                                                            in_channels = self.numChannels, 
+                                                                                           num_workers=self.num_workers,
                                                                                            num_class = self.numlabels, 
                                                                                            graph_cfg = graph_cfg, 
                                                                                            data_cfg = data_cfg,
@@ -1357,6 +1359,7 @@ class ExampleQWidget(Container):
             if self.backbone == "ST-GCN":
 
                 model = st_gcn_aaai18_pylightning_3block.ST_GCN_18(in_channels = self.numChannels, 
+                                                                   num_workers=self.num_workers,
                                                        num_class = self.numlabels, 
                                                        graph_cfg = graph_cfg, 
                                                        data_cfg = data_cfg, 
@@ -1507,12 +1510,14 @@ class ExampleQWidget(Container):
         self.chkpt =  os.path.join(log_folder, self.chkpt_dropdown.value)  # spinbox
 
         for n in range(4): # does ths reuse model in current state?
-            model = st_gcn_aaai18_pylightning_3block.ST_GCN_18(in_channels = self.numChannels, 
+            model = st_gcn_aaai18_pylightning_3block.ST_GCN_18(in_channels = self.numChannels,
+                                                              num_workers=self.num_workers,
                                                    num_class = orig_num_labels, # self.numlabels, 
                                                    graph_cfg = graph_cfg, 
                                                    data_cfg = data_cfg, 
                                                    hparams = hparams).load_from_checkpoint(self.chkpt, 
-                                                                                           in_channels = self.numChannels, 
+                                                                                           in_channels = self.numChannels,
+                                                                                           num_workers=self.num_workers,
                                                                                            num_class = orig_num_labels, #self.numlabels, 
                                                                                            graph_cfg = graph_cfg, 
                                                                                            data_cfg = data_cfg,
@@ -1594,11 +1599,12 @@ class ExampleQWidget(Container):
 
         
         model = st_gcn_aaai18_pylightning_3block.ST_GCN_18(in_channels = self.numChannels, 
-                                                num_class = self.numlabels, 
+                                                num_class = self.numlabels, num_workers=self.num_workers,
                                                 graph_cfg = graph_cfg, 
                                                 data_cfg = data_cfg, 
                                                 hparams = hparams).load_from_checkpoint(self.chkpt, 
                                                                                         in_channels = self.numChannels, 
+                                                                                        num_workers=self.num_workers,
                                                                                         num_class = self.numlabels, 
                                                                                         graph_cfg = graph_cfg, 
                                                                                         data_cfg = data_cfg,

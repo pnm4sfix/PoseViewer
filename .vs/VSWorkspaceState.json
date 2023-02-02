@@ -3,8 +3,9 @@
     "",
     "\\src",
     "\\src\\pose_viewer",
-    "\\src\\pose_viewer\\models"
+    "\\src\\pose_viewer\\models",
+    "\\src\\pose_viewer\\_tests"
   ],
-  "SelectedNode": "\\src\\pose_viewer\\_loader.py",
+  "SelectedNode": "\\src\\pose_viewer\\_widget.py",
   "PreviewInSolutionExplorer": false
 }
