@@ -212,7 +212,27 @@ class ExampleQWidget(Container):
                      #self.num_labels_spinbox, self.num_channels_spinbox, self.model_dropdown,, 
                      #])
 
+    def full_reset(self):
+        self.ind = 0
+        self.behaviour_no = 0
+        self.clean = None # old function may be useful in future
+        self.im_subset = None
+        self.labeled = False
+        self.behaviours = []
+        self.choices = []
+        self.b_labels = None
+
+        self.classification_data = {}
+        self.point_subset = np.array([])
         
+        self.coords_data = {}
+
+        ## reset layers
+       
+        #self.reset_layers()
+
+        
+
     def decoder_dir_changed(self, value):
         # Look for and load yaml configuration file
         # load config
@@ -232,6 +252,10 @@ class ExampleQWidget(Container):
             center_node = self.config_data["data_cfg"]["center"]
             self.set_center_node(center_node)
             self.set_n_nodes(n_nodes)
+            self.classification_dict = self.config_data["data_cfg"]["classification_dict"]
+            self.choices = [v for v in self.classification_dict.values()]
+            self.label_menu.choices = self.choices
+           
         except:
             print("No configuration yaml located in decoder data folder")
 
@@ -271,11 +295,12 @@ class ExampleQWidget(Container):
         print(event)
         self.frame = event.value[0]
         try:
-            self.frame_line.data = np.c_[[self.frame, self.frame], [0, 10]]
+            self.frame_line.data = np.c_[[self.frame, self.frame], 
+                                         [0, self.frame_line.data[1, 0]]]
 
         except:
             print("Failed to update frame line")
-        #stokes_1d.plot(None, ind_lambda)
+        
         print("updating slider frame {}".format(self.frame))
 
     
@@ -317,10 +342,11 @@ class ExampleQWidget(Container):
         t = np.arange(self.gauss_filtered.shape[0])
 
         self.viewer1d.add_line( np.c_[t, self.gauss_filtered], color = "magenta", label = "Movement")
-        self.viewer1d.add_line(np.c_[[0, self.gauss_filtered.shape[0]], [self.threshold, self.threshold]], color = "cyan", label = "Movement threshold")
+        thresh = np.median(self.gauss_filtered) + self.threshold
+        self.viewer1d.add_line(np.c_[[0, self.gauss_filtered.shape[0]], [thresh, thresh]], color = "cyan", label = "Movement threshold")
         self.viewer1d.reset_view()
         self.label_menu.choices = choices
-        
+        self.frame_line.data = np.c_[[self.frame, self.frame], [0,  thresh + (0.5 * thresh)]]
     def plot_behaving_region(self):
         choices = self.label_menu.choices
         regions = [
@@ -555,7 +581,7 @@ class ExampleQWidget(Container):
         # get all moving frames
         moving_frames_idx = np.array([], dtype = "int64")
 
-        for start, stop in  np.array(self.behaviours).tolist():#[random_integers].tolist():
+        for start, stop in np.array(self.behaviours).tolist():#[random_integers].tolist():
             arr = np.arange(start, stop, dtype = "int64")
             moving_frames_idx = np.append(moving_frames_idx, arr)
 
@@ -575,7 +601,7 @@ class ExampleQWidget(Container):
         boxes = centre_rs + add_array.reshape(-1, *add_array.shape)
 
         #specify label params
-        nframes = 300 # at the moment more than 300 is really slow
+        nframes = moving_frames_idx.shape[0] # at the moment more than 300 is really slow
         labels = ["movement"] * nframes
         properties = {
             'label': labels,
@@ -592,7 +618,7 @@ class ExampleQWidget(Container):
 
         # add shapes layer
         self.shapes_layer = self.viewer.add_shapes(boxes[:nframes], shape_type='rectangle', edge_width=5,
-                              edge_color='#55ff00', face_color = "transparent", visible =True, properties=properties, text = text_params)
+                              edge_color='#55ff00', face_color = "transparent", visible = False, properties=properties, text = text_params)
         self.label_menu.choices = self.choices
 
 
@@ -628,8 +654,8 @@ class ExampleQWidget(Container):
                 except:
                     self.video_file = str(event)
 
-            vid = pims.open(str(self.video_file))
-            self.fps = vid.frame_rate
+            #vid = pims.open(str(self.video_file))
+            self.fps = self.config_data["data_cfg"]["fps"]
             
             self.im = VideoReaderNP(str(self.video_file))
             
@@ -695,11 +721,13 @@ class ExampleQWidget(Container):
         self.ind_spinbox.max = max(self.classification_data.keys())
         self.ind_spinbox.value = 0
         self.spinbox.value = 0 
+        
         self.tracks = None # set this to none as it's not saved
         self.ind = 0
-        self.choices = pd.Series([label["classification"] for k,label in self.classification_data[1].items()]).unique().tolist()
-        print(self.choices)
-        self.label_menu.choices = tuple(self.choices)
+        #self.choices = pd.Series([label["classification"] for k,label in self.classification_data[1].items()]).unique().tolist()
+        #print(self.choices)
+        #self.label_menu.choices = tuple(self.choices)
+        
         
     def convert_txt_todict(self, event):
         """Reads event text file and converts it to usable format to display behaviours in GUI."""
@@ -779,6 +807,8 @@ class ExampleQWidget(Container):
         if self.labeled == True:
             
             self.im_subset.data = self.im
+            self.spinbox.max = len(self.classification_data[self.ind].keys())
+            print("number of labelled behaviours is {}".format(self.spinbox.max))
             
         else:
             exists = len([n for n, v in enumerate(self.coords_data) if self.ind-1 == n])
@@ -833,6 +863,7 @@ class ExampleQWidget(Container):
         #else:
         #     self.ind_spinbox.value = last_ind
         self.spinbox.value = 0
+        self.spinbox.max = len(self.behaviours)
         self.plot_movement_1d()
 
             
@@ -1000,7 +1031,7 @@ class ExampleQWidget(Container):
                 #ind_table = 
             #else:
             ind_group = classification_file.create_group("/", str(ind), "Individual" + str(ind))
-            ind_table = classification_file.create_table(ind_group, "labels", "Behaviour", "Individual {} Behaviours".format(str(ind)))
+            ind_table = classification_file.create_table(ind_group, "labels", Behaviour, "Individual {} Behaviours".format(str(ind)))
             
             ind_subset = self.classification_data[ind]
             
@@ -1806,15 +1837,19 @@ class ExampleQWidget(Container):
         return all_ind_bouts, all_labels
 
     def view_data(self):
-        train_data = np.load(os.path.join(self.decoder_data_dir, "Zebtrain.npy"))
-        train_labels = np.load(os.path.join(self.decoder_data_dir, "Zebtrain_labels.npy"))
-        self.transform = self.config_data["train_cfg"]["transform"]
-        self.batch_size = self.batch_size_spinbox.value
-        self.zebdata = ZebData(transform = self.transform)
-        self.zebdata.data = train_data
-        self.zebdata.labels = train_labels
 
-        self.spinbox.max = self.zebdata.labels.shape[0]
+        try:
+            train_data = np.load(os.path.join(self.decoder_data_dir, "Zebtrain.npy"))
+            train_labels = np.load(os.path.join(self.decoder_data_dir, "Zebtrain_labels.npy"))
+            self.transform = self.config_data["train_cfg"]["transform"]
+            self.batch_size = self.batch_size_spinbox.value
+            self.zebdata = ZebData(transform = self.transform)
+            self.zebdata.data = train_data
+            self.zebdata.labels = train_labels
+
+            self.spinbox.max = self.zebdata.labels.shape[0]
+        except:
+            print("No training data")
 
     def show_data(self, idx):
         print(self.zebdata[idx][0].shape)
@@ -1907,7 +1942,12 @@ class ExampleQWidget(Container):
             np.save(os.path.join(self.decoder_data_dir, "inference_durations_vs_datasetsize.npy"), durations)
 
 
-
+class Behaviour(tb.IsDescription):
+    number = tb.Int32Col()
+    classification = tb.StringCol(16)
+    n_nodes = tb.Int32Col()
+    start = tb.Int32Col()
+    stop = tb.Int32Col()
 
 
 
