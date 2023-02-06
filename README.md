@@ -24,16 +24,20 @@ https://napari.org/stable/plugins/index.html
 ## Installation
 
 Create an anaconda environment:
+
     conda create -n PoseR python=3.10
 
 Install CUDA if using NVIDIA GPU:
+
     conda install -c "nvidia/label/cuda-11.7.0" cuda
 
 Install Pytorch:
-For GPU: 
+For GPU:
+
     conda install pytorch torchvision torchaudio pytorch-cuda=11.7 -c pytorch -c nvidia
 
 For CPU only version:
+
     conda install pytorch torchvision torchaudio cpuonly -c pytorch
 
 
@@ -51,7 +55,9 @@ To install latest development version :
 
 
 Install additional packages:
+
     pip install napari["all"] napari-video napari_plot tables PIMS imageio_ffmpeg==0.4.8 vispy==0.12.1 pytorch-lightning test-tube
+
 
     pip install -U scikit-learn
 
