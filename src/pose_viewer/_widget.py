@@ -1157,6 +1157,7 @@ class ExampleQWidget(Container):
         self.preprocess_bouts() ## assumes behaviours extracted
         self.predict_behaviours()
         self.update_classification_data_with_predictions()
+        self.populate_chkpt_dropdown()
 
 
     def preprocess_bouts(self):
