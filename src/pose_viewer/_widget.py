@@ -1447,7 +1447,7 @@ class ExampleQWidget(Container):
         
 
             trainer = Trainer(logger = TTLogger,
-                devices = 1, accelerator = "gpu",
+                devices = 1, accelerator = self.accelerator,
                 max_epochs=100,
                 callbacks = [early_stop, checkpoint_callback], auto_lr_find=True)#, stochastic_weight_avg=True) - this is a callback in latest lightning-, swa -swa messes up auto lr
 
