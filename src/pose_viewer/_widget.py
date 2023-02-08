@@ -214,7 +214,12 @@ class ExampleQWidget(Container):
 
     def full_reset(self):
         self.ind = 0
+        self.ind_spinbox.value = 0 
+        
         self.behaviour_no = 0
+        self.spinbox.value = 0
+        self.spinbox.max = 0
+
         self.clean = None # old function may be useful in future
         self.im_subset = None
         self.labeled = False
@@ -229,8 +234,10 @@ class ExampleQWidget(Container):
 
         ## reset layers
        
-        #self.reset_layers()
+        self.reset_layers()
 
+        self.reset_viewer1d_layers()
+    
         
 
     def decoder_dir_changed(self, value):
@@ -347,6 +354,9 @@ class ExampleQWidget(Container):
         self.viewer1d.reset_view()
         self.label_menu.choices = choices
         self.frame_line.data = np.c_[[self.frame, self.frame], [0,  thresh + (0.5 * thresh)]]
+    
+        
+        
     def plot_behaving_region(self):
         choices = self.label_menu.choices
         regions = [
@@ -360,6 +370,15 @@ class ExampleQWidget(Container):
                 name = "Behaviour",
             )
         self.label_menu.choices = choices
+
+    def reset_viewer1d_layers(self):
+        print("Layers remaining are {}".format(self.viewer1d.layers))
+        try:
+            for layer in self.viewer1d.layers:
+                #print(layer)
+                self.viewer.layers.remove(layer)
+        except:
+            pass
 
     def reset_layers(self):
             """Resest all napari layers. Called three times to ensure layers removed."""
@@ -618,7 +637,7 @@ class ExampleQWidget(Container):
 
         # add shapes layer
         self.shapes_layer = self.viewer.add_shapes(boxes[:nframes], shape_type='rectangle', edge_width=5,
-                              edge_color='#55ff00', face_color = "transparent", visible = False, properties=properties, text = text_params)
+                              edge_color='#55ff00', face_color = "transparent", visible = True, properties=properties, text = text_params)
         self.label_menu.choices = self.choices
 
 
@@ -635,8 +654,11 @@ class ExampleQWidget(Container):
                     self.h5_file = event.value
                 except:
                     self.h5_file = str(event)
-            #self.full_reset()
+            self.full_reset()
+            
             self.read_coords(self.h5_file)
+
+            self.populate_chkpt_dropdown() # because it keeps erasing it
             
             
     
@@ -667,6 +689,8 @@ class ExampleQWidget(Container):
             else:
 
                 self.im_subset.data = self.im
+
+            self.populate_chkpt_dropdown()  # because adding layers keeps erasing it
 
         
     def convert_h5_todict(self, event):
@@ -831,6 +855,7 @@ class ExampleQWidget(Container):
                 self.points_layer = self.viewer.add_points(self.points, size=3, visible= False)
                 #self.track_layer = self.viewer.add_tracks(self.tracks, tail_length = 100, tail_width = 3)
                 self.label_menu.choices = self.choices
+                self.populate_chkpt_dropdown() # because keeps erasing dropdown choices
     
     def extract_behaviours(self, value=None):
         print("Extracting behaviours using {} method".format(self.extract_method))
@@ -856,7 +881,8 @@ class ExampleQWidget(Container):
 
         #exists = len([k for k in self.classification_data.keys() if k == self.ind])
         if self.ind in self.classification_data:#exists > 0:
-            pass
+            # reset -covers cases where classification data needs to be overwritten
+            self.classification_data[self.ind] = {}
         else:
             self.classification_data[self.ind] = {}
 
@@ -865,6 +891,8 @@ class ExampleQWidget(Container):
         self.spinbox.value = 0
         self.spinbox.max = len(self.behaviours)
         self.plot_movement_1d()
+
+        self.populate_chkpt_dropdown()
 
             
     def behaviour_changed(self, event):
@@ -1460,7 +1488,11 @@ class ExampleQWidget(Container):
             trainer.fit(model)
 
             print("Finished Training - best model is {}".format(checkpoint_callback.best_model_path)) 
-        # Add finetune - freeze model-replace last layer and train
+        
+            # load new checkpoints
+            self.populate_chkpt_dropdown()
+            # Add finetune - freeze model-replace last layer and train
+
 
     def initialise_params(self):
         self.numlabels = self.config_data["data_cfg"]["numLabels"]
