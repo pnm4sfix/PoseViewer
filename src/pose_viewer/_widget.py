@@ -1346,17 +1346,17 @@ class ExampleQWidget(Container):
 
             #np.save(os.path.join(self.decoder_data_dir, "label_dict.npy"), self.label_dict)
             self.augmentation = self.config_data["data_cfg"]["augmentation"]
-            if self.augmentation is not False:
-                zebdata = ZebData()
-                zebdata.data = self.train_data
-                zebdata.labels = self.train_labels
-                zebdata.ideal_sample_no = self.augmentation
-                zebdata.dynamic_augmentation()
+            #if self.augmentation is not False:
+            #    zebdata = ZebData()
+            #    zebdata.data = self.train_data
+            #    zebdata.labels = self.train_labels
+            #    zebdata.ideal_sample_no = self.augmentation
+            #    zebdata.dynamic_augmentation()
 
-                self.train_data = zebdata.data
-                self.train_labels = zebdata.labels
+            #    self.train_data = zebdata.data
+            #    self.train_labels = zebdata.labels
 
-                print("Augmented Training Data Shape is {}".format(self.train_data.shape))
+            #    print("Augmented Training Data Shape is {}".format(self.train_data.shape))
 
 
 
@@ -1498,6 +1498,23 @@ class ExampleQWidget(Container):
             self.labels_to_ignore =  self.config_data["data_cfg"]["labels_to_ignore"]
         except:
             self.labels_to_ignore = None
+
+        try:
+            self.augmentation = self.config_data["data_cfg"]["augmentation"]
+            if self.augmentation == "None":
+                print("No augmentation")
+                self.augment = False
+                self.ideal_sample_no = None
+
+            else:
+                print("Augmenting data {}".format(self.augmentation)
+                self.augment = True
+                self.ideal_sample_no = self.augmentation
+        except:
+            self.augment = False
+            self.ideal_sample_no = None
+
+
         
         # assign model parameters
         PATH_DATASETS = self.decoder_data_dir
@@ -1506,8 +1523,8 @@ class ExampleQWidget(Container):
         
 
         data_cfg = { 'data_dir': PATH_DATASETS,
-                    'augment': False,
-                    'ideal_sample_no' : None,
+                    'augment': self.augment,
+                    'ideal_sample_no' : self.ideal_sample_no,
                     'shift' : False,
                      'transform':self.transform,
                      'labels_to_ignore': self.labels_to_ignore}
