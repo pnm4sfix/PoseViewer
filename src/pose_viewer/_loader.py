@@ -257,7 +257,7 @@ class ZebData(torch.utils.data.Dataset):
         bhv_idx = [] 
         for label in np.unique(self.labels):
 
-            if label > 0:
+            if label >= 0:
 
                 filt = self.labels == label
                 label_count = self.labels[filt].shape[0]
