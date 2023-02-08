@@ -48,6 +48,10 @@ class ZebData(torch.utils.data.Dataset):
                  target_transform = None, ideal_sample_no =None, augment = False, shift = False,
                  labels_to_ignore = None):
         
+        self.ideal_sample_no = ideal_sample_no
+        self.transform = transform
+        self.target_transform = target_transform
+        
         if data_file is not None:
             self.data = np.load(data_file)
         
@@ -94,9 +98,7 @@ class ZebData(torch.utils.data.Dataset):
             self.data = None
             self.labels = None
         
-        self.ideal_sample_no = ideal_sample_no
-        self.transform = transform
-        self.target_transform = target_transform
+        
 
         if self.transform == "heatmap":
             x_min = -3#self.data[:,0].min()
