@@ -265,7 +265,7 @@ class ZebData(torch.utils.data.Dataset):
 
                 augmented = np.zeros((self.ideal_sample_no +label_count, *label_subset.shape[1:]))
 
-                if label_count <100: # this drops rare behaviours
+                if label_count <1: # this drops rare behaviours
                     #drop_labels.append(v)
                     pass
 
