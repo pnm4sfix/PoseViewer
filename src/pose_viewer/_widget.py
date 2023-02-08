@@ -1499,6 +1499,7 @@ class ExampleQWidget(Container):
         except:
             self.labels_to_ignore = None
 
+
         try:
             self.augmentation = self.config_data["data_cfg"]["augmentation"]
             if self.augmentation == "None":
@@ -1507,7 +1508,7 @@ class ExampleQWidget(Container):
                 self.ideal_sample_no = None
 
             else:
-                print("Augmenting data {}".format(self.augmentation)
+                print("Augmenting data {}".format(self.augmentation))
                 self.augment = True
                 self.ideal_sample_no = self.augmentation
         except:
