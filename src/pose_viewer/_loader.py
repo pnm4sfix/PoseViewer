@@ -2,6 +2,7 @@ import torch
 import numpy as np
 from torchvision.transforms import ToTensor, Lambda
 from numba import jit
+import pandas as pd
 try:
     import cupy as cp
 except:
@@ -62,6 +63,7 @@ class ZebData(torch.utils.data.Dataset):
             # drop junk 0 cluster
             #self.data = self.data[self.labels>0]
             #self.labels = self.labels[self.labels>0]
+            print("Dataset breakdown is {}".format(pd.Series(self.labels).value_counts()))
 
             if labels_to_ignore is not None:
                 label_filter = np.isin(self.labels, labels_to_ignore)
@@ -70,6 +72,8 @@ class ZebData(torch.utils.data.Dataset):
                 print("Ignoring Labels {}".format(labels_to_ignore))
                 print("Filtered data contains labels {}".format(np.unique(self.labels)))
             
+            
+
             mapping = {k:v for v, k in enumerate(np.unique(self.labels))}
             for k, v in mapping.items():
                 self.labels[self.labels==k] = v 
