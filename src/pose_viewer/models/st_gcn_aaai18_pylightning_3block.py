@@ -76,6 +76,11 @@ class ST_GCN_18(LightningModule):
             self.labels_to_ignore = data_cfg["labels_to_ignore"]
         except:
             self.labels_to_ignore = None
+
+        try:
+            self.label_dict = data_cfg["label_dict"]
+        except:
+            self.label_dict = None
         
         self.learning_rate = hparams.learning_rate
         self.batch_size = hparams.batch_size
@@ -223,12 +228,14 @@ class ST_GCN_18(LightningModule):
             self.train_data = ZebData(os.path.join(self.data_dir, "Zebtrain.npy"), 
                                       os.path.join(self.data_dir, "Zebtrain_labels.npy"),
                                       target_transform = target_transform, augment = self.augment, ideal_sample_no = self.ideal_sample_no, shift = self.shift, 
-                                      transform = self.transform, labels_to_ignore =  self.labels_to_ignore)
+                                      transform = self.transform, labels_to_ignore =  self.labels_to_ignore,
+                                      label_dict = self.label_dict)
                                   
             self.test_data = ZebData(os.path.join(self.data_dir, "Zebtest.npy"), 
                                      os.path.join(self.data_dir, "Zebtest_labels.npy"),
                                      target_transform = target_transform,
-                                     transform = self.transform, labels_to_ignore = self.labels_to_ignore)
+                                     transform = self.transform, labels_to_ignore = self.labels_to_ignore,
+                                     label_dict = self.label_dict)
         
         
         

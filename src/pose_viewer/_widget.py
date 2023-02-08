@@ -1515,7 +1515,10 @@ class ExampleQWidget(Container):
             self.augment = False
             self.ideal_sample_no = None
 
-
+        self.class_dict = self.config_data["data_cfg"]["classification_dict"]
+        self.label_dict = {v:k for k, v in self.class_dict.items()}
+        #label_dict = {k:v for v, k in enumerate(np.unique(self.train_labels))}
+        print("Label dict is {}".format(self.label_dict))
         
         # assign model parameters
         PATH_DATASETS = self.decoder_data_dir
@@ -1528,7 +1531,8 @@ class ExampleQWidget(Container):
                     'ideal_sample_no' : self.ideal_sample_no,
                     'shift' : False,
                      'transform':self.transform,
-                     'labels_to_ignore': self.labels_to_ignore}
+                     'labels_to_ignore': self.labels_to_ignore,
+                     'label_dict':self.label_dict}
 
         graph_cfg = {"layout":self.graph_layout}
 

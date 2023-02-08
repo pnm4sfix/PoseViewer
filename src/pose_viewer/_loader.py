@@ -46,7 +46,7 @@ class ZebData(torch.utils.data.Dataset):
     """Class for test data - because data isnt large just load data at init """
     def __init__(self, data_file =None, label_file= None, transform=None,
                  target_transform = None, ideal_sample_no =None, augment = False, shift = False,
-                 labels_to_ignore = None):
+                 labels_to_ignore = None, label_dict = None):
         
         self.ideal_sample_no = ideal_sample_no
         self.transform = transform
@@ -77,16 +77,29 @@ class ZebData(torch.utils.data.Dataset):
                 print("Filtered data contains labels {}".format(np.unique(self.labels)))
             
             
+            if label_dict is None:
+                print("No label dict")
+                mapping = {k:v for v, k in enumerate(np.unique(self.labels))}
+                for k, v in mapping.items():
+                    self.labels[self.labels==k] = v
 
-            mapping = {k:v for v, k in enumerate(np.unique(self.labels))}
-            for k, v in mapping.items():
-                self.labels[self.labels==k] = v 
-            
-            
+            elif label_dict is not None:
+                mapping = label_dict
+                print("Labels already mapped during saving")
+                #mapping = label_dict
+                # semantic: value
 
-            if augment:
+            print("label mapping is {}".format(mapping))
+            print("Unique labels are {}".format(np.unique(self.labels)))
                 
-                self.dynamic_augmentation()
+            
+                
+            
+            
+
+            #if augment:
+                
+            #    self.dynamic_augmentation()
 
             if shift:
                 #move into positive space
@@ -306,6 +319,8 @@ class ZebData(torch.utils.data.Dataset):
         self.augmented_labels = np.array(augmented_labels)
         self.labels = np.concatenate(self.augmented_labels)
         self.bhv_idx = np.concatenate(np.array(bhv_idx))
+
+        print("New dataset characteristics {}".format(pd.Series(self.labels).value_counts()))
         
         
     def rotate_transform(self, behaviour, numAngles):
