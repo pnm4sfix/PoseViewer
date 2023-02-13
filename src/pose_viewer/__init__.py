@@ -5,6 +5,7 @@ except ImportError:
 from ._widget import ExampleQWidget
 from ._loader import HyperParams
 from ._loader import ZebData
+from .utils import Animation
 
 __all__ = (
     "ExampleQWidget"

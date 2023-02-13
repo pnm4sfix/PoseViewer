@@ -132,6 +132,33 @@ class Graph():
             neighbor_link = [(i - 1, j - 1) for (i, j) in neighbor_1base]
             self.edge = self_link + neighbor_link
             self.center = 0
+
+        elif layout == "mouse1":
+            self.num_node = 13
+            self_link = [(i, i) for i in range(self.num_node)]
+            neighbor_1base = [[0, 3], [0, 1], [0, 4], [1, 2], [2, 3], [2, 4],
+                             [3, 6], [3, 5], [4, 7], [4, 5], [5, 7], [5, 6], 
+                             [6, 8], [7, 9], [5, 8], [5, 9], [5, 10], [9, 10],
+                             [8, 10], [10, 11], [11, 12]]
+            neighbor_link = [(i - 1, j - 1) for (i, j) in neighbor_1base]
+            self.edge = self_link + neighbor_link
+            self.center = 5
+
+        elif layout == "mouse2":
+            self.num_node = 18
+            self_link = [(i, i) for i in range(self.num_node)]
+            neighbor_1base = [[0, 5], [1, 5], [2, 5], [3, 5], [4, 5],
+                             [ 5,  8],[ 5,  6],[ 5,  9],
+                             [ 6,  7], [ 7,  8],[ 7,  9],[ 8, 11],
+                             [ 8, 10],[ 9, 12],[ 9, 10],[10, 12],
+                             [10, 11],[11, 13],[12, 14], [10, 13],
+                             [10, 14],[10, 15],[14, 15],
+                             [13, 15],[15, 16],[16, 17]]
+
+            neighbor_link = [(i - 1, j - 1) for (i, j) in neighbor_1base]
+            self.edge = self_link + neighbor_link
+            self.center = 10
+            
         
         else:
             #print(layout)

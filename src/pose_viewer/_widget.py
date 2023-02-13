@@ -224,7 +224,7 @@ class ExampleQWidget(Container):
         self.im_subset = None
         self.labeled = False
         self.behaviours = []
-        self.choices = []
+        #self.choices = []
         self.b_labels = None
 
         self.classification_data = {}
@@ -262,6 +262,11 @@ class ExampleQWidget(Container):
             self.classification_dict = self.config_data["data_cfg"]["classification_dict"]
             self.choices = [v for v in self.classification_dict.values()]
             self.label_menu.choices = self.choices
+
+            try:
+                self.dataset =  self.config_data["data_cfg"]["dataset"]
+            except:
+                self.dataset = None
            
         except:
             print("No configuration yaml located in decoder data folder")
@@ -753,9 +758,7 @@ class ExampleQWidget(Container):
         #self.label_menu.choices = tuple(self.choices)
         
         
-    def convert_txt_todict(self, event):
-        """Reads event text file and converts it to usable format to display behaviours in GUI."""
-        #self.full_reset()
+    def convert_oft_todict(self, event):
         try:
                 self.labeled_txt = event.value.value
         except:
@@ -763,24 +766,13 @@ class ExampleQWidget(Container):
                 self.labeled_txt = event.value
             except:
                 self.labeled_txt = str(event)
-        
-            
-        event_df = pd.read_csv(self.labeled_txt, ",", header=2)
-        
-        if self.preprocess_txt_file:
-            event_df = self.preprocess_txt(event_df)
-        
-        if self.extend_window:
-            event_df.iloc[:, 1] = event_df.iloc[:, 1] + 500 # added because maggot behaviour durations cut behaviour short
 
-        self.txt_behaviours = event_df.iloc[:, 2].unique().astype("str").tolist()
-        self.label_menu.choices = tuple(self.txt_behaviours)
-        fps = self.fps
-        event_df.iloc[:, :2] = ((event_df.iloc[:, :2]/1e3) * fps).astype("int64")
-
+        
+        event_df = pd.read_csv(self.labeled_txt) ## no header
         
         self.labeled = True
-        self.ind_spinbox.value = 1
+        
+
         
         key = list(self.coords_data.keys())[self.ind-1]
         self.x = self.coords_data[key]["x"]
@@ -789,10 +781,11 @@ class ExampleQWidget(Container):
         self.get_points()
         
         ind_dict = {}
-        for n, row in enumerate(event_df.itertuples()):
-            self.start = int(row[1]) #Time
-            self.stop = int(self.start + np.ceil(row[2])) #Duration
-            classification = row[3] #TrackName
+        for n in range(event_df.shape[0]):
+            row = event_df.iloc[n]
+            self.start = int(row.start * self.fps) #Time
+            self.stop = int(row.end * self.fps) #Duration
+            classification = row.label #TrackName
             
             self.point_subset = self.points.reshape((self.n_nodes, -1, 3))[:, int(self.start):int(self.stop)].reshape(-1, 3)
             self.point_subset = self.point_subset - np.array([self.start, 0, 0])
@@ -806,17 +799,96 @@ class ExampleQWidget(Container):
             ind_dict[n+1] = behav_dic
 
         self.classification_data = {}
-        self.classification_data[1] = ind_dict
+        self.classification_data[1] = ind_dict # assuming 1 individual
+        print(self.classification_data.keys())
         
         self.ind_spinbox.max = max(self.classification_data.keys())
-        
+        self.ind_spinbox.value = 1
         self.spinbox.value = 0
         self.behaviour_no = 0
-        self.label_menu.reset_choices()
-        self.txt_behaviours = event_df.iloc[:, 2].unique().astype("str").tolist()
-        self.label_menu.reset_choices()
-        self.label_menu.choices = tuple(self.txt_behaviours)
-        print(self.label_menu.choices)
+
+        self.populate_chkpt_dropdown()
+        self.label_menu.choices = self.choices
+
+        print("Loaded OFT txt file is {}".format(event_df))
+        #self.label_menu.reset_choices() # this should be set by the config
+        #self.txt_behaviours = event_df.iloc[:, 2].unique().astype("str").tolist()
+        #self.label_menu.reset_choices()
+        #self.label_menu.choices = tuple(self.txt_behaviours)
+        #print(self.label_menu.choices)
+
+
+    def convert_txt_todict(self, event):
+        """Reads event text file and converts it to usable format to display behaviours in GUI."""
+        #self.full_reset()
+        try:
+                self.labeled_txt = event.value.value
+        except:
+            try:
+                self.labeled_txt = event.value
+            except:
+                self.labeled_txt = str(event)
+
+
+        # read txt file 
+        
+        if "OFT" in self.dataset: 
+            self.convert_oft_todict(event)
+
+        else:# self.dataset == "Drosophila":
+            event_df = pd.read_csv(self.labeled_txt, ",", header=2)
+            
+            if self.preprocess_txt_file:
+                event_df = self.preprocess_txt(event_df)
+
+        
+            if self.extend_window:
+                event_df.iloc[:, 1] = event_df.iloc[:, 1] + 500 # added because maggot behaviour durations cut behaviour short
+                event_df.iloc[:, :2] = ((event_df.iloc[:, :2]/1e3) * self.fps).astype("int64")
+            self.txt_behaviours = event_df.iloc[:, 2].unique().astype("str").tolist()
+            #self.label_menu.choices = tuple(self.txt_behaviours)
+            #fps = self.fps
+        
+
+        
+            self.labeled = True
+            self.ind_spinbox.value = 1
+        
+            key = list(self.coords_data.keys())[self.ind-1]
+            self.x = self.coords_data[key]["x"]
+            self.y = self.coords_data[key]["y"]
+            self.ci = self.coords_data[key]["ci"]
+            self.get_points()
+        
+            ind_dict = {}
+            for n, row in enumerate(event_df.itertuples()):
+                self.start = int(row[1]) #Time
+                self.stop = int(self.start + np.ceil(row[2])) #Duration
+                classification = row[3] #TrackName
+            
+                self.point_subset = self.points.reshape((self.n_nodes, -1, 3))[:, int(self.start):int(self.stop)].reshape(-1, 3)
+                self.point_subset = self.point_subset - np.array([self.start, 0, 0])
+                self.ci_subset = self.ci.iloc[:, int(self.start):int(self.stop)].to_numpy().flatten()
+                behav_dic = {"classification": classification,
+                            "coords": self.point_subset,
+                            "start": self.start,
+                            "stop": self.stop,
+                            "ci" : self.ci_subset}
+
+                ind_dict[n+1] = behav_dic
+
+            self.classification_data = {}
+            self.classification_data[1] = ind_dict
+        
+            self.ind_spinbox.max = max(self.classification_data.keys())
+        
+            self.spinbox.value = 0
+            self.behaviour_no = 0
+            self.label_menu.reset_choices()
+            self.txt_behaviours = event_df.iloc[:, 2].unique().astype("str").tolist()
+            self.label_menu.reset_choices()
+            self.label_menu.choices = tuple(self.txt_behaviours)
+            print(self.label_menu.choices)
 
 
         
@@ -829,10 +901,12 @@ class ExampleQWidget(Container):
         
         #check ind in data
         if self.labeled == True:
-            
+            print(type(self.ind))
             self.im_subset.data = self.im
             self.spinbox.max = len(self.classification_data[self.ind].keys())
             print("number of labelled behaviours is {}".format(self.spinbox.max))
+            self.label_menu.choices = self.choices
+            self.populate_chkpt_dropdown() # because keeps erasing dropdown choices
             
         else:
             exists = len([n for n, v in enumerate(self.coords_data) if self.ind-1 == n])
@@ -956,22 +1030,30 @@ class ExampleQWidget(Container):
                     except:
                         self.points_layer = self.viewer.add_points(self.point_subset, size=5)
                         self.label_menu.choices = self.choices
-
-                    if self.tracks is not None:
-                        self.track_subset = self.tracks[self.start:self.stop]
-                        self.track_subset = self.track_subset - np.array([0, self.start, 0, 0]) # zero z because add_image has zeroed
+                    try:
+                        if self.tracks is not None:
+                            self.track_subset = self.tracks[self.start:self.stop]
+                            self.track_subset = self.track_subset - np.array([0, self.start, 0, 0]) # zero z because add_image has zeroed
                 
-                        try:
-                            self.track_layer.data = self.track_subset
-                        except:
+                            try:
+                                self.track_layer.data = self.track_subset
+                            except:
                     
-                            self.track_layer = self.viewer.add_tracks(self.track_subset, tail_length = 500, tail_width = 3)
+                                self.track_layer = self.viewer.add_tracks(self.track_subset, tail_length = 500, tail_width = 3)
+                                self.label_menu.choices = self.choices
+                        #self.points_layer.data = self.point_subset
+                    except:
+                        print("No tracks")
+                        self.populate_chkpt_dropdown()
+                        if len(self.label_menu.choices) == 0:
                             self.label_menu.choices = self.choices
-                    #self.points_layer.data = self.point_subset
-                
+                    print("label menu choices are {}".format(self.label_menu.choices))
+                    print(type(self.label_menu.choices))
+                    print(len(self.label_menu.choices))
+                    print(self.choices)
                     if self.label_menu.choices == ():
                         try:
-                            self.label_menu.choices = self.txt_behaviours
+                            self.label_menu.choices = self.choices
                         except:
                             pass
                     self.update_classification()
@@ -1106,8 +1188,20 @@ class ExampleQWidget(Container):
             data_t["individuals"] = ["individual1"]*data_t.shape[0]
             data_t = data_t.reset_index().set_index(["scorer", "individuals", "bodyparts", "coords"]).reset_index()
 
+
         for individual in data_t.individuals.unique():
-            indv1 = data_t[data_t.individuals == individual].copy()
+            if self.dataset == "OFT":
+                bodypoints = ["nose", "headcentre", "neck", "earl", "earr", "bodycentre", 
+                "bcl", "bcr", "hipl", "hipr", "tailbase", "tailcentre", "tailtip"]
+                print("Selecting bodypoints {}".format(bodypoints))
+                 
+                indv1 = data_t[(data_t.individuals == individual) &
+                                (data_t.bodyparts.isin(bodypoints))]
+
+            else:
+
+                indv1 = data_t[data_t.individuals == individual].copy()
+
             # calculate interframe variability
             if self.clean:
                 indv1.loc[:, 0:] = indv1.loc[:,0:].interpolate(axis=1) # fillsna
@@ -1226,7 +1320,7 @@ class ExampleQWidget(Container):
             bouts[n, :2] = bhv_align
             bouts[n,  2] = ci[0]
 
-            padded_bouts[n] =  self.zebdata.pad(bouts[n], 300)
+            padded_bouts[n] =  self.zebdata.pad(bouts[n], T2)
 
             
         self.zebdata.data = padded_bouts
@@ -1529,6 +1623,8 @@ class ExampleQWidget(Container):
 
         try:
             self.labels_to_ignore =  self.config_data["data_cfg"]["labels_to_ignore"]
+            if self.labels_to_ignore == "None":
+                self.labels._to_ignore = None
         except:
             self.labels_to_ignore = None
 
@@ -1547,6 +1643,12 @@ class ExampleQWidget(Container):
         except:
             self.augment = False
             self.ideal_sample_no = None
+
+        try:
+            self.dataset = self.config_data["dataset"]
+
+        except:
+            self.dataset = None
 
         self.class_dict = self.config_data["data_cfg"]["classification_dict"]
         self.label_dict = {v:k for k, v in self.class_dict.items()}
