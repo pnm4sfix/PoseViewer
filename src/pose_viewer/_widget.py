@@ -336,20 +336,24 @@ class ExampleQWidget(Container):
             elif T_method == "None":
                 T = 43
             self.behaviours = [(self.frame+n, self.frame+n+T) for n in range(self.batch_size)]
-            self.preprocess_bouts()
+            # check if frame already processed
+            if self.ethogram.data[:, self.frame].sum() == 0:
+                self.preprocess_bouts()
 
             
 
-            model_input = self.zebdata[:self.batch_size][0].to(self.device)
-            with torch.no_grad():
-                probs = self.model(model_input).cpu().numpy()
+                model_input = self.zebdata[:self.batch_size][0].to(self.device)
+                with torch.no_grad():
+                    probs = self.model(model_input).cpu().numpy()
                 
-            self.ethogram.data[:, self.frame:self.frame+self.batch_size] = probs.T
-            #have to switch the layer off and on for chnage to be seen
-            self.ethogram.visible = False
-            self.ethogram.visible = True
-            #self.viewer1d.reset_view()
-            print("Probs are {}".format(probs))
+                self.ethogram.data[:, self.frame:self.frame+self.batch_size] = probs.T
+                #have to switch the layer off and on for chnage to be seen
+                self.ethogram.visible = False
+                self.ethogram.visible = True
+                #self.viewer1d.reset_view()
+                print("Probs are {}".format(probs))
+            else:
+                print("Frame already processed")
 
 
     #def extract_behaviour_from_frame(self):
