@@ -248,6 +248,8 @@ class ZebData(torch.utils.data.Dataset):
             
 
         return bhv_pad
+
+
     
     
     # find angle from [0, 1]
@@ -295,7 +297,7 @@ class ZebData(torch.utils.data.Dataset):
 
                     ratio = self.ideal_sample_no / label_subset.shape[0]
 
-                    augmentation_types = 4
+                    augmentation_types = 5
                     remainder = int(ratio % augmentation_types)
                     numAug = int(ratio / augmentation_types)
 
@@ -306,9 +308,11 @@ class ZebData(torch.utils.data.Dataset):
                             jittered = self.jitter_transform(bhv, numAug)
                             scaled = self.scale_transform(bhv, numAug)
                             sheared = self.shear_transform(bhv, numAug)
+                            rolled = self.roll_tranform(bhv, numAug)
 
                             #concatenate 4 augmentations and original
-                            augmented = np.concatenate([bhv.reshape(-1, *bhv.shape), rotated, jittered, scaled, sheared])
+                            augmented = np.concatenate([bhv.reshape(-1, *bhv.shape), rotated,
+                                                       jittered, scaled, sheared, rolled])
                             augmented_data.append(augmented)
                             augmented_labels.append(np.array([label]*augmented.shape[0]).flatten())
                             bhv_idx.append(np.array([b]*augmented.shape[0]).flatten())
@@ -404,6 +408,18 @@ class ZebData(torch.utils.data.Dataset):
 
 
         return sheared
+
+    
+    def roll_transform(self, behaviour, numRolls):
+        rolled = np.zeros((numRolls, *behaviour.shape))
+
+        for roll_no in range(numRolls):
+            roll_x = np.random.randint(-20, 20, 1)[0]
+            rolled[roll_no] = np.roll(behaviour, roll_x, axis=1)
+
+        return rolled
+
+
 
     #@staticmethod
     #@jit
