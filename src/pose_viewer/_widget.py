@@ -174,6 +174,8 @@ class ExampleQWidget(Container):
         self.choices = []
         self.b_labels = None
         self.decoder_data_dir = None
+        self.ground_truth_ethogram = None
+        self.ethogram = None
 
         self.add_1d_widget()
         self.viewer.dims.events.current_step.connect(self.update_slider)
@@ -276,6 +278,7 @@ class ExampleQWidget(Container):
             print("No configuration yaml located in decoder data folder")
 
         self.populate_chkpt_dropdown() # load ckpt files if any
+        self.initialise_params()
 
         print("decoder config is {}".format(self.config_data))
         self.view_data()
@@ -459,6 +462,9 @@ class ExampleQWidget(Container):
                                                             "start" : self.start,
                                                             "stop": self.stop,
                                                              "ci" : self.ci_subset}
+
+        etho = self.classification_data_to_ethogram()
+        self.populate_groundt_etho(etho)
     
     def update_classification(self):
         """Updates classification label in GUI"""
@@ -799,6 +805,7 @@ class ExampleQWidget(Container):
         
         self.tracks = None # set this to none as it's not saved
         self.ind = 0
+
         #self.choices = pd.Series([label["classification"] for k,label in self.classification_data[1].items()]).unique().tolist()
         #print(self.choices)
         #self.label_menu.choices = tuple(self.choices)
@@ -856,6 +863,10 @@ class ExampleQWidget(Container):
         self.populate_chkpt_dropdown()
         self.label_menu.choices = self.choices
 
+
+        etho = self.classification_data_to_ethogram()
+        self.populate_groundt_etho(etho)
+
         print("Loaded OFT txt file is {}".format(event_df))
         #self.label_menu.reset_choices() # this should be set by the config
         #self.txt_behaviours = event_df.iloc[:, 2].unique().astype("str").tolist()
@@ -863,6 +874,29 @@ class ExampleQWidget(Container):
         #self.label_menu.choices = tuple(self.txt_behaviours)
         #print(self.label_menu.choices)
 
+
+    def classification_data_to_ethogram(self):
+        N = self.dlc_data.shape[0]
+        etho = np.zeros((len(self.label_dict), N))
+        
+        for bout, data in self.classification_data[self.ind].items():
+            idx = np.arange(data["start"], data["stop"])
+            label = self.label_dict[data["classification"]]
+            etho[label, idx] = 1
+
+        return etho
+
+    def populate_groundt_etho(self, etho):
+        if self.ground_truth_ethogram is not None:
+            self.ground_truth_ethogram.data = etho
+        else:
+            self.ground_truth_ethogram = self.viewer1d.add_image(etho, name = "Ground truth")
+
+    def populate_predicted_etho(self, etho):
+        if self.ethogram is not None:
+            self.ethogram.data = etho
+        else:
+            self.ethogram = self.viewer1d.add_image(etho, name = "Predicted" )
 
     def convert_txt_todict(self, event):
         """Reads event text file and converts it to usable format to display behaviours in GUI."""
@@ -983,6 +1017,9 @@ class ExampleQWidget(Container):
                 self.egocentric = reshap.copy()
                 self.egocentric[:,:, 1:] = reshap[:, :, 1:]-center.reshape((-1, *center.shape)) # subtract center nodes
         
+        
+        etho = self.classification_data_to_ethogram()
+        self.populate_groundt_etho(etho)
     
     def extract_behaviours(self, value=None):
         print("Extracting behaviours using {} method".format(self.extract_method))
@@ -1166,6 +1203,8 @@ class ExampleQWidget(Container):
                         print("Label score is {}".format(self.predictions.numpy()[self.behaviour_no-1]))
 
                     self.plot_behaving_region()
+
+                
                     #self.update_classification()
             elif (len(self.behaviours) == 0):
                 self.show_data(self.behaviour_no -1)
@@ -1304,6 +1343,8 @@ class ExampleQWidget(Container):
         self.preprocess_bouts() ## assumes behaviours extracted
         self.predict_behaviours()
         self.update_classification_data_with_predictions()
+        etho = self.classification_data_to_ethogram()
+        self.populate_predicted_etho(etho)
         self.populate_chkpt_dropdown()
 
 
