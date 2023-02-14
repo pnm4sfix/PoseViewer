@@ -150,7 +150,7 @@ class ST_GCN_18(LightningModule):
         # prediction
         x = self.fcn(x)
         x = x.view(x.size(0), -1)
-
+        x = self.softmax(x)
         return x
     
     def configure_optimizers(self):
