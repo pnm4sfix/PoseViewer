@@ -192,6 +192,9 @@ class ExampleQWidget(Container):
         self.chkpt_dropdown = ComboBox(label='Model type', choices = [],
                                                   tooltip = "Select chkpt for predicting behaviour")
         self.model_dropdown.changed.connect(self.populate_chkpt_dropdown)
+        
+        self.live_checkbox = CheckBox(text = "Live Decode")
+        self.live_checkbox.clicked.connect(self.live_decode)
 
         self.analyse_button = PushButton(label = "Analyse")
         self.analyse_button.clicked.connect(self.analyse)
@@ -208,7 +211,8 @@ class ExampleQWidget(Container):
         
 
         self.extend([self.batch_size_spinbox,self.lr_spinbox,  self.chkpt_dropdown,
-                    self.train_button, self.analyse_button, self.finetune_button, self.test_button ])#self.num_workers_spinbox,  self.dropout_spinbox,
+                    self.train_button, self.live_checkbox, 
+                    self.analyse_button, self.finetune_button, self.test_button ])#self.num_workers_spinbox,  self.dropout_spinbox,
                      #self.num_labels_spinbox, self.num_channels_spinbox, self.model_dropdown,, 
                      #])
 
@@ -314,6 +318,12 @@ class ExampleQWidget(Container):
             print("Failed to update frame line")
         
         print("updating slider frame {}".format(self.frame))
+
+        if self.live_checkbox:
+            # create behaviour from points
+            # pass to mode
+            # softmax logits and add to a ethogram in viewer1d
+            pass
 
     
 
@@ -1489,6 +1499,49 @@ class ExampleQWidget(Container):
             np.save(os.path.join(self.decoder_data_dir, "Zebtest_labels.npy"), self.test_labels)
 
             print("Data Prepared and Save at {}".format(self.decoder_data_dir))
+
+    def live_decode(self, event):
+        print("Live checkbox is {}".format(self.live_checkbox.value))
+        if self.live_checkbox.value:
+            data_cfg, graph_cfg, hparams = self.initialise_params()
+
+            log_folder = os.path.join(self.decoder_data_dir, "lightning_logs")
+            self.chkpt =  os.path.join(log_folder, self.chkpt_dropdown.value)  # spinbox
+            if self.backbone == "ST-GCN":
+                model = st_gcn_aaai18_pylightning_3block.ST_GCN_18(in_channels = self.numChannels, 
+                                                num_class = self.numlabels, num_workers=self.num_workers,
+                                                graph_cfg = graph_cfg, 
+                                                data_cfg = data_cfg, 
+                                                hparams = hparams).load_from_checkpoint(self.chkpt, 
+                                                                                        in_channels = self.numChannels, 
+                                                                                        num_workers=self.num_workers,
+                                                                                        num_class = self.numlabels, 
+                                                                                        graph_cfg = graph_cfg, 
+                                                                                        data_cfg = data_cfg,
+                                                                                        hparams = hparams)
+
+
+        
+            model.freeze()
+
+            if self.accelerator == "gpu":
+                device = torch.device("cuda")
+            elif self.accelerator == "cpu":
+                device = torch.device("cpu")
+
+            model.to(device)
+
+            print("Model succesfully loaded onto device {}".format(device))
+                
+            #elif self.backbone == "C3D":
+             #   model = c3d.C3D(num_class =self.numlabels,
+             #                    num_channels = self.numChannels,
+             #                    data_cfg = data_cfg,
+             #                    hparams= hparams,
+             #                    num_workers = self.num_workers
+             #                    )
+
+
 
     def train(self):
         #self.decoder_data_dir = self.decoder_dir_picker.value

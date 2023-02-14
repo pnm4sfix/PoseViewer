@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+
 from pytorch_lightning import LightningModule, Trainer
 from torchmetrics.functional.classification.accuracy import accuracy
 from torch.autograd import Variable
@@ -126,6 +127,7 @@ class ST_GCN_18(LightningModule):
 
         # fcn for prediction
         self.fcn = nn.Conv2d(256, num_class, kernel_size=1)
+        self.softmax = nn.Softmax(dim = 1)
 
     def forward(self, x):
         # data normalization
