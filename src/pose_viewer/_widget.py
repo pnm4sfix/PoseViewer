@@ -319,19 +319,50 @@ class ExampleQWidget(Container):
         
         print("updating slider frame {}".format(self.frame))
 
-        if self.live_checkbox:
+        if self.live_checkbox.value:
             # create behaviour from points
             # pass to mode
             # softmax logits and add to a ethogram in viewer1d
-            pass
+            denominator = self.config_data["data_cfg"]["denominator"]
+            T_method = self.config_data["data_cfg"]["T"]
+            fps = self.config_data["data_cfg"]["fps"]
 
-    
+            if T_method == "window":
+                T = 2 * int(fps/denominator)
+
+            elif type(T_method) == "int":
+                T = T_method # these methods assume behaviours last the same amount of time -which is a big assumption
+
+            elif T_method == "None":
+                T = 43
+            self.behaviours = [(self.frame+n, self.frame+n+T) for n in range(self.batch_size)]
+            self.preprocess_bouts()
+
+            
+
+            model_input = self.zebdata[:self.batch_size][0].to(self.device)
+            with torch.no_grad():
+                probs = self.model(model_input).cpu().numpy()
+                
+            self.ethogram.data[:, self.frame:self.frame+self.batch_size] = probs.T
+            #have to switch the layer off and on for chnage to be seen
+            self.ethogram.visible = False
+            self.ethogram.visible = True
+            #self.viewer1d.reset_view()
+            print("Probs are {}".format(probs))
+
+
+    #def extract_behaviour_from_frame(self):
+    #    T = 43 # assign this better in future
+    #    54t
+        
 
     def add_1d_widget(self):
         
 
-        self.viewer1d = napari_plot.ViewerModel1D()
+        self.viewer1d = napari_plot.ViewerModel1D() # ViewerModel1D()
         widget = QtViewer(self.viewer1d)
+        
         self.viewer.window.add_dock_widget(widget, area="bottom", name="Movement")
         self.viewer1d.axis.x_label = "Time"
         self.viewer1d.axis.y_label = "Movement"
@@ -389,6 +420,7 @@ class ExampleQWidget(Container):
     def reset_viewer1d_layers(self):
         print("Layers remaining are {}".format(self.viewer1d.layers))
         try:
+            #self.viewer1d.clear_canvas()
             for layer in self.viewer1d.layers:
                 #print(layer)
                 self.viewer.layers.remove(layer)
@@ -940,6 +972,13 @@ class ExampleQWidget(Container):
                 #self.track_layer = self.viewer.add_tracks(self.tracks, tail_length = 100, tail_width = 3)
                 self.label_menu.choices = self.choices
                 self.populate_chkpt_dropdown() # because keeps erasing dropdown choices
+
+                # get egocentric
+                reshap = self.points.reshape(self.n_nodes, -1, 3)
+                center = reshap[self.center_node, :, 1:] #selects x,y center nodes
+                self.egocentric = reshap.copy()
+                self.egocentric[:,:, 1:] = reshap[:, :, 1:]-center.reshape((-1, *center.shape)) # subtract center nodes
+        
     
     def extract_behaviours(self, value=None):
         print("Extracting behaviours using {} method".format(self.extract_method))
@@ -1287,6 +1326,8 @@ class ExampleQWidget(Container):
         elif type(T_method) == "int":
             T = T_method # these methods assume behaviours last the same amount of time -which is a big assumption
 
+        elif T_method == "None":
+            T = 43
         V = points.shape[2]
         M = 1
 
@@ -1508,7 +1549,7 @@ class ExampleQWidget(Container):
             log_folder = os.path.join(self.decoder_data_dir, "lightning_logs")
             self.chkpt =  os.path.join(log_folder, self.chkpt_dropdown.value)  # spinbox
             if self.backbone == "ST-GCN":
-                model = st_gcn_aaai18_pylightning_3block.ST_GCN_18(in_channels = self.numChannels, 
+                self.model = st_gcn_aaai18_pylightning_3block.ST_GCN_18(in_channels = self.numChannels, 
                                                 num_class = self.numlabels, num_workers=self.num_workers,
                                                 graph_cfg = graph_cfg, 
                                                 data_cfg = data_cfg, 
@@ -1522,16 +1563,21 @@ class ExampleQWidget(Container):
 
 
         
-            model.freeze()
+            self.model.freeze()
 
             if self.accelerator == "gpu":
-                device = torch.device("cuda")
+                self.device = torch.device("cuda")
             elif self.accelerator == "cpu":
-                device = torch.device("cpu")
+                self.device = torch.device("cpu")
 
-            model.to(device)
+            self.model.to(self.device)
 
-            print("Model succesfully loaded onto device {}".format(device))
+            self.ethogram_im = np.zeros((self.numlabels,  self.dlc_data.shape[0]))
+            #self.viewer1d.clear_canvas()
+
+            self.ethogram = self.viewer1d.add_image(self.ethogram_im, blending = "opaque",
+                                                    colormap = "inferno", visible = True)
+            print("Model succesfully loaded onto device {}".format(self.device))
                 
             #elif self.backbone == "C3D":
              #   model = c3d.C3D(num_class =self.numlabels,
