@@ -308,7 +308,7 @@ class ZebData(torch.utils.data.Dataset):
                             jittered = self.jitter_transform(bhv, numAug)
                             scaled = self.scale_transform(bhv, numAug)
                             sheared = self.shear_transform(bhv, numAug)
-                            rolled = self.roll_tranform(bhv, numAug)
+                            rolled = self.roll_transform(bhv, numAug)
 
                             #concatenate 4 augmentations and original
                             augmented = np.concatenate([bhv.reshape(-1, *bhv.shape), rotated,
